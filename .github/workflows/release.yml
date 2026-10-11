@@ -112,7 +112,7 @@ jobs:
   # ── publish — merge binaries, generate checksums, create release ───────────
   publish:
     name: Publish release
-    needs: [build-linux, build-darwin-arm64, build-darwin-amd64, build-windows]
+    needs: [build-linux, build-darwin-arm64, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
@@ -139,6 +139,5 @@ jobs:
             --generate-notes \
             dist/chakram-linux-amd64 \
             dist/chakram-darwin-arm64 \
-            dist/chakram-darwin-amd64 \
             dist/chakram-windows-amd64.exe \
             dist/SHA256SUMS
