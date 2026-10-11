@@ -29,16 +29,19 @@ GCP_PROJECT="${GCP_PROJECT:-}"
 TAG="${1:?usage: $0 <tag> [vm-name]}"
 TARGET_VM="${2:-all}"
 
-declare -A VM_ZONE=(
-  [chakram-seed-1]="asia-south1-c"
-  [chakram-seed-2]="europe-west1-b"
-  [chakram-seed-3]="us-central1-a"
-)
+vm_zone() {
+  case "$1" in
+    chakram-seed-1) echo "asia-south1-c" ;;
+    chakram-seed-2) echo "europe-west1-b" ;;
+    chakram-seed-3) echo "us-central1-a" ;;
+    *) echo "error: unknown VM '$1'" >&2; return 1 ;;
+  esac
+}
 
 VMS=("chakram-seed-1" "chakram-seed-2" "chakram-seed-3")
 if [[ "$TARGET_VM" != "all" ]]; then
   FULL_VM="chakram-${TARGET_VM#chakram-}"
-  [[ -z "${VM_ZONE[$FULL_VM]+_}" ]] && { echo "error: unknown VM '$TARGET_VM'"; exit 1; }
+  vm_zone "$FULL_VM" > /dev/null || { echo "error: unknown VM '$TARGET_VM'"; exit 1; }
   VMS=("$FULL_VM")
 fi
 
@@ -70,7 +73,8 @@ chmod 0755 "$STAGING/chakram-linux-amd64"
 
 deploy_one() {
   local VM="$1"
-  local ZONE="${VM_ZONE[$VM]}"
+  local ZONE
+  ZONE="$(vm_zone "$VM")"
 
   echo ""
   echo "══════════════════════════════════════════════════════"

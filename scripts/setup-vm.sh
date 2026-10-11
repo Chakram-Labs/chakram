@@ -27,38 +27,30 @@ GETH_COMMIT="3d84c6b2e3e9be032f8f2dcd9e900f89391fcdab"
 GO_VERSION="1.25.0"
 GO_SHA256="2852af0cb20a13139b3448992e69b868e50ed0f8a1e5940ee1de9e19a123b613"
 
-declare -A VM_ZONE=(
-  [chakram-seed-1]="asia-south1-c"
-  [chakram-seed-2]="europe-west1-b"
-  [chakram-seed-3]="us-central1-a"
-)
-declare -A VM_IP=(
-  [chakram-seed-1]="34.14.218.57"
-  [chakram-seed-2]="207.175.24.63"
-  [chakram-seed-3]="136.80.159.167"
-)
-
-# Consensus P2P peers: each node lists the other two.
-declare -A VM_PEERS=(
-  [chakram-seed-1]="http://207.175.24.63:9101,http://136.80.159.167:9101"
-  [chakram-seed-2]="http://34.14.218.57:9101,http://136.80.159.167:9101"
-  [chakram-seed-3]="http://34.14.218.57:9101,http://207.175.24.63:9101"
-)
-
-# seed-2 is the only miner; set its address before running this script.
-# Leave empty on seed-1 and seed-3 (they use --no-mine).
-declare -A VM_MINER_ADDR=(
-  [chakram-seed-1]=""
-  [chakram-seed-2]="0x211508Df9A6e9371D2DbfaFa5Dab348795E6DCeA"
-  [chakram-seed-3]=""
-)
-
 # ── argument parsing ──────────────────────────────────────────────────────────
 
 VM="${1:?usage: $0 <vm-name>}"
-ZONE="${VM_ZONE[$VM]:?unknown VM: $VM}"
-PEERS="${VM_PEERS[$VM]}"
-MINER_ADDR="${VM_MINER_ADDR[$VM]}"
+
+case "$VM" in
+  chakram-seed-1)
+    ZONE="asia-south1-c"
+    PEERS="http://207.175.24.63:9101,http://136.80.159.167:9101"
+    MINER_ADDR=""
+    ;;
+  chakram-seed-2)
+    ZONE="europe-west1-b"
+    PEERS="http://34.14.218.57:9101,http://136.80.159.167:9101"
+    MINER_ADDR="0x211508Df9A6e9371D2DbfaFa5Dab348795E6DCeA"
+    ;;
+  chakram-seed-3)
+    ZONE="us-central1-a"
+    PEERS="http://34.14.218.57:9101,http://207.175.24.63:9101"
+    MINER_ADDR=""
+    ;;
+  *)
+    echo "error: unknown VM '$VM' (valid: chakram-seed-{1,2,3})"; exit 1 ;;
+esac
+
 IS_SEED1=false
 IS_MINER=false
 [[ "$VM" == "chakram-seed-1" ]] && IS_SEED1=true
