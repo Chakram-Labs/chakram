@@ -47,13 +47,15 @@ geth --datadir <datadir> \
   --miner 0xYourAddress
 ```
 
-The `--network` flag selects genesis, chain ID and initial difficulty:
+The `--network` flag selects genesis, chain ID, initial difficulty, and default P2P port:
 
-| Flag value | Chain ID | Use case |
-|---|---|---|
-| `devnet` | 11641 | Local single-node development |
-| `testnet` | 11640 | Public testnet |
-| `mainnet` | 1164 | Production mainnet |
+| Flag value | Chain ID | P2P port | Use case |
+|---|---|---|---|
+| `devnet` | 11641 | 9100 | Local single-node development |
+| `testnet` | 11640 | 9101 | Public testnet |
+| `mainnet` | 1164 | 9102 | Production mainnet |
+
+Pass `--listen :PORT` to override the default, or `--listen off` to disable P2P entirely.
 
 ### Mining options
 

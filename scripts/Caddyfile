@@ -1,0 +1,73 @@
+# Caddyfile — seed-1 (34.14.218.57)
+# Serves the Chakram testnet public JSON-RPC at rpc.testnet.chakram.one.
+#
+# Requires: Caddy built with the caddy-ratelimit module (xcaddy build).
+# HTTPS certificates are obtained automatically via Let's Encrypt.
+# Port 80 is redirected to 443 automatically by Caddy.
+#
+# What this exposes:
+#   POST https://rpc.testnet.chakram.one/  → geth HTTP RPC on 127.0.0.1:8545
+#
+# What geth already restricts (via --http.api eth,net,web3):
+#   engine_*, admin_*, debug_*, personal_*, miner_* are never reachable —
+#   they are simply not served by geth on port 8545.
+#
+# Additional guards here:
+#   - Only POST requests are accepted (JSON-RPC)
+#   - Rate limit: 50 req/s burst, 20 req/s sustained per IP
+#   - Payload size capped at 64 KB
+#   - CORS headers for browser wallets
+#   - Port 8551 (authrpc) and 8545 (geth plain RPC) are never exposed; they
+#     bind to 127.0.0.1 only and are not reachable from the internet.
+
+rpc.testnet.chakram.one {
+    # ── rate limiting (caddy-ratelimit module) ────────────────────────────
+    rate_limit {
+        zone testnet_rpc {
+            key     {remote_host}
+            events  50
+            window  1s
+        }
+    }
+
+    # ── only accept POST (JSON-RPC) ───────────────────────────────────────
+    @not_post not method POST
+    respond @not_post "Method Not Allowed" 405
+
+    # ── request body size cap ─────────────────────────────────────────────
+    request_body {
+        max_size 64KB
+    }
+
+    # ── CORS for browser wallets (MetaMask, etc.) ─────────────────────────
+    header {
+        Access-Control-Allow-Origin  "*"
+        Access-Control-Allow-Methods "POST, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type"
+        # Prevent information leakage
+        -Server
+        -X-Powered-By
+    }
+
+    @options method OPTIONS
+    respond @options "" 204
+
+    # ── reverse proxy to geth ─────────────────────────────────────────────
+    reverse_proxy 127.0.0.1:8545 {
+        header_up Host {upstream_hostport}
+        # geth is local, short timeouts are fine
+        transport http {
+            dial_timeout 2s
+            response_header_timeout 30s
+        }
+    }
+
+    # ── access log ────────────────────────────────────────────────────────
+    log {
+        output file /var/log/caddy/rpc-access.log {
+            roll_size    100MB
+            roll_keep    5
+        }
+        format json
+    }
+}

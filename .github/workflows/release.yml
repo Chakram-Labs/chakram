@@ -1,0 +1,137 @@
+name: Release
+
+# Triggered by version tags: v2.0.0, v2.1.0-rc1, etc.
+# Builds native-CGo binaries on matching runners so RandomX JIT links correctly
+# for each platform without cross-compilation.
+on:
+  push:
+    tags:
+      - 'v2.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v2.0.1) — must already exist in the repo'
+        required: true
+
+permissions:
+  contents: write   # needed to create the GitHub release
+
+env:
+  GO_VERSION_FILE: go.mod
+
+jobs:
+
+  # ── linux/amd64 — the primary deployment target (seed nodes) ──────────────
+  build-linux:
+    name: linux/amd64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache: true
+      - name: Build
+        env:
+          CGO_ENABLED: "1"
+          GOOS: linux
+          GOARCH: amd64
+        run: go build -trimpath -o chakram-linux-amd64 ./cmd/chakram
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-linux-amd64
+          path: chakram-linux-amd64
+
+  # ── darwin/arm64 — Apple Silicon (M1+); primary community miner platform ──
+  build-darwin-arm64:
+    name: darwin/arm64
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache: true
+      - name: Build
+        env:
+          CGO_ENABLED: "1"
+        run: go build -trimpath -o chakram-darwin-arm64 ./cmd/chakram
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-darwin-arm64
+          path: chakram-darwin-arm64
+
+  # ── darwin/amd64 — Intel Macs ─────────────────────────────────────────────
+  build-darwin-amd64:
+    name: darwin/amd64
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache: true
+      - name: Build
+        env:
+          CGO_ENABLED: "1"
+        run: go build -trimpath -o chakram-darwin-amd64 ./cmd/chakram
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-darwin-amd64
+          path: chakram-darwin-amd64
+
+  # ── windows/amd64 ─────────────────────────────────────────────────────────
+  build-windows:
+    name: windows/amd64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache: true
+      - name: Build
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          export PATH="/c/msys64/mingw64/bin:$PATH"
+          go build -trimpath -o chakram-windows-amd64.exe ./cmd/chakram
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-windows-amd64
+          path: chakram-windows-amd64.exe
+
+  # ── publish — merge binaries, sign checksums, create release ──────────────
+  publish:
+    name: Publish release
+    needs: [build-linux, build-darwin-arm64, build-darwin-amd64, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist/
+
+      - name: Generate SHA256SUMS
+        working-directory: dist/
+        run: sha256sum chakram-* > SHA256SUMS
+
+      - name: Show checksums
+        working-directory: dist/
+        run: cat SHA256SUMS
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name || inputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --title "Chakram $TAG" \
+            --generate-notes \
+            dist/chakram-linux-amd64 \
+            dist/chakram-darwin-arm64 \
+            dist/chakram-darwin-amd64 \
+            dist/chakram-windows-amd64.exe \
+            dist/SHA256SUMS

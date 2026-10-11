@@ -56,39 +56,43 @@ type engineAPI interface {
 
 // networkCfg holds the per-network parameters selected by --network.
 type networkCfg struct {
-	name           string
-	chainID        uint64
-	genesisHashHex string
-	genesisBlock   func() *consensus.ConsensusBlock
-	initialTarget  uint64
-	defaultDataDir string
+	name              string
+	chainID           uint64
+	genesisHashHex    string
+	genesisBlock      func() *consensus.ConsensusBlock
+	initialTarget     uint64
+	defaultDataDir    string
+	defaultListenAddr string
 }
 
 // networks is the authoritative mapping from --network value to config.
 var networks = map[string]networkCfg{
 	"devnet": {
-		name:           "devnet",
-		chainID:        consensus.DevnetChainID,
-		genesisHashHex: consensus.GenesisExecutionPayloadHashHex,
-		genesisBlock:   consensus.NewGenesisConsensusBlock,
-		initialTarget:  consensus.DevnetInitialCompactTarget,
-		defaultDataDir: "devnet-data",
+		name:              "devnet",
+		chainID:           consensus.DevnetChainID,
+		genesisHashHex:    consensus.GenesisExecutionPayloadHashHex,
+		genesisBlock:      consensus.NewGenesisConsensusBlock,
+		initialTarget:     consensus.DevnetInitialCompactTarget,
+		defaultDataDir:    "devnet-data",
+		defaultListenAddr: ":9100",
 	},
 	"testnet": {
-		name:           "testnet",
-		chainID:        consensus.TestnetChainID,
-		genesisHashHex: consensus.TestnetGenesisExecutionPayloadHashHex,
-		genesisBlock:   consensus.NewTestnetGenesisConsensusBlock,
-		initialTarget:  consensus.TestnetInitialCompactTarget,
-		defaultDataDir: "testnet-data",
+		name:              "testnet",
+		chainID:           consensus.TestnetChainID,
+		genesisHashHex:    consensus.TestnetGenesisExecutionPayloadHashHex,
+		genesisBlock:      consensus.NewTestnetGenesisConsensusBlock,
+		initialTarget:     consensus.TestnetInitialCompactTarget,
+		defaultDataDir:    "testnet-data",
+		defaultListenAddr: ":9101",
 	},
 	"mainnet": {
-		name:           "mainnet",
-		chainID:        consensus.MainnetChainID,
-		genesisHashHex: consensus.MainnetGenesisExecutionPayloadHashHex,
-		genesisBlock:   consensus.NewMainnetGenesisConsensusBlock,
-		initialTarget:  consensus.InitialCompactTargetV2,
-		defaultDataDir: "mainnet-data",
+		name:              "mainnet",
+		chainID:           consensus.MainnetChainID,
+		genesisHashHex:    consensus.MainnetGenesisExecutionPayloadHashHex,
+		genesisBlock:      consensus.NewMainnetGenesisConsensusBlock,
+		initialTarget:     consensus.InitialCompactTargetV2,
+		defaultDataDir:    "mainnet-data",
+		defaultListenAddr: ":9102",
 	},
 }
 
@@ -100,7 +104,7 @@ func main() {
 		rpc             = flag.String("rpc", "http://127.0.0.1:8545", "geth plain JSON-RPC URL")
 		jwt             = flag.String("jwt", "", "path to JWT secret file (required)")
 		minerHex        = flag.String("miner", "0x0000000000000000000000000000000000000000", "miner Ethereum address (receives rewards)")
-		listen          = flag.String("listen", "", "consensus P2P listen address (e.g. :9000); empty to disable")
+		listen          = flag.String("listen", "", "consensus P2P listen address (default: :9100/9101/9102 per network; pass \"off\" to disable)")
 		peersFlag       = flag.String("peers", "", "comma-separated consensus peer URLs (e.g. http://127.0.0.1:9001)")
 		noDiscover      = flag.Bool("no-discover", false, "disable seed node lookup (for private networks)")
 		noMine          = flag.Bool("no-mine", false, "run as a non-mining relay/sync node")
@@ -145,9 +149,21 @@ func main() {
 		initialTarget = v
 	}
 
+	listenAddr := *listen
+	if listenAddr == "" {
+		listenAddr = net.defaultListenAddr
+	} else if listenAddr == "off" {
+		listenAddr = ""
+	}
+
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
 	log.Printf("network: %s  chainID: %d", net.name, net.chainID)
 	log.Printf("RandomX engine: %s", randomXImplementation())
+	if listenAddr != "" {
+		log.Printf("P2P listen: %s", listenAddr)
+	} else {
+		log.Printf("P2P listen: disabled")
+	}
 
 	if !*noMine && !randomXIsCgo() && !*allowSlowMining {
 		fmt.Fprintln(os.Stderr,
@@ -168,7 +184,7 @@ func main() {
 		}
 	}
 
-	if err := run(ctx, net, dir, *authrpc, *rpc, *jwt, *minerHex, *listen, *peersFlag, *noMine, *light, numThreads, initialTarget); err != nil && !errors.Is(err, context.Canceled) {
+	if err := run(ctx, net, dir, *authrpc, *rpc, *jwt, *minerHex, listenAddr, *peersFlag, *noMine, *light, numThreads, initialTarget); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("fatal: %v", err)
 	}
 	log.Printf("%s node stopped cleanly", net.name)
