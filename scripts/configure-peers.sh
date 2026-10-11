@@ -23,7 +23,7 @@ GCP_PROJECT="${GCP_PROJECT:-}"
 [[ -z "$GCP_PROJECT" ]] && { echo "error: set GCP_PROJECT env var"; exit 1; }
 
 GETH_PORT=30303
-IPC="/var/lib/chakram/testnet/geth/geth/geth.ipc"
+IPC="/var/lib/chakram/testnet/geth/geth.ipc"
 TOML="/etc/geth-testnet.toml"
 
 VM1="chakram-seed-1"; ZONE1="asia-south1-c";   IP1="34.14.218.57"
@@ -56,7 +56,7 @@ get_enode() {
 
     IPC="$IPC"
     DATADIR="/var/lib/chakram/testnet/geth"
-    JWT="\$DATADIR/jwt.hex"
+    JWT="/var/lib/chakram/testnet/jwt.hex"
     rm -f "\$IPC"
 
     # Start geth using a scratch authrpc port (services not running yet) so
@@ -86,9 +86,9 @@ get_enode() {
     kill \$GPID 2>/dev/null; wait \$GPID 2>/dev/null
     rm -f /tmp/geth-probe.log "\$IPC"
 
-    # Replace the IPC-reported IP (usually 0.0.0.0 or blank) with the real
-    # external IP so the enode URL is routable from other VMs.
-    echo "\$ENODE" | sed "s/@[^:]*:/@${IP}:/"
+    # Replace the probe IP and port (30398) with the real external IP and the
+    # production devp2p port (30303) so static-nodes entries are routable.
+    echo "\$ENODE" | sed "s/@[^:]*:[^?]*/@${IP}:${GETH_PORT}/"
 ENDSSH
 }
 
