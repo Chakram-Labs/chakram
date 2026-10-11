@@ -162,10 +162,8 @@ remote bash -s << EOF
   tar -xzf /tmp/geth.tar.gz -C /tmp
   cd /tmp/go-ethereum-${GETH_VERSION#v}
   go build -o /tmp/geth ./cmd/geth
-  go build -o /tmp/bootnode ./cmd/bootnode
   sudo install -o root -g root -m 0755 /tmp/geth /usr/local/bin/geth
-  sudo install -o root -g root -m 0755 /tmp/bootnode /usr/local/bin/bootnode
-  rm -rf /tmp/geth /tmp/bootnode /tmp/geth.tar.gz /tmp/go-ethereum-${GETH_VERSION#v}
+  rm -rf /tmp/geth /tmp/geth.tar.gz /tmp/go-ethereum-${GETH_VERSION#v}
   echo "geth installed: \$(geth version | grep 'Version:')"
 EOF
 
@@ -224,7 +222,8 @@ ExecStart=/usr/local/bin/geth \
   --http.api eth,net,web3 \
   --nodiscover \
   --maxpeers 25 \
-  --port 30303
+  --port 30303 \
+  --config /etc/geth-testnet.toml
 Restart=on-failure
 RestartSec=10s
 TimeoutStopSec=120s
@@ -270,6 +269,13 @@ TimeoutStopSec=60s
 [Install]
 WantedBy=multi-user.target
 UNIT
+  # Stub TOML — configure-peers.sh fills in [Node.P2P] StaticNodes after all
+  # three VMs are set up and we have their enode URLs.
+  if [[ ! -f /etc/geth-testnet.toml ]]; then
+    printf '[Node.P2P]\nStaticNodes = []\n' > /etc/geth-testnet.toml
+    chown chakram:chakram /etc/geth-testnet.toml
+    chmod 0640 /etc/geth-testnet.toml
+  fi
   systemctl daemon-reload
   systemctl enable geth-testnet.service chakram-testnet.service
   echo "systemd units installed and enabled"
