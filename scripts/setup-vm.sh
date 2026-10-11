@@ -109,7 +109,7 @@ remote bash -s << EOF
     echo "Go $GO_VERSION already installed"
     exit 0
   fi
-  echo "Installing Go $GO_VERSION…"
+  echo "Installing Go ${GO_VERSION}..."
   curl -fsSL "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tar.gz
   echo "$GO_SHA256  /tmp/go.tar.gz" | sha256sum -c
   sudo rm -rf /usr/local/go
