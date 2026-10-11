@@ -22,6 +22,10 @@ GCP_PROJECT="${GCP_PROJECT:-}"          # override via env or fill in here
 GETH_VERSION="v1.17.6"
 GETH_SHA256="b358cd5abb0f5639cd2409877d73f3d5002d834c3e781734a1010dda1c0914ad"
 GETH_COMMIT="3d84c6b2e3e9be032f8f2dcd9e900f89391fcdab"
+# Go version required by geth v1.17.6 go.mod and our go.mod (whichever is higher).
+# SHA256 sourced from https://go.dev/dl/?mode=json at the time of this commit.
+GO_VERSION="1.25.0"
+GO_SHA256="2852af0cb20a13139b3448992e69b868e50ed0f8a1e5940ee1de9e19a123b613"
 
 declare -A VM_ZONE=(
   [chakram-seed-1]="asia-south1-c"
@@ -106,22 +110,21 @@ EOF
 
 # ── step 2: Go toolchain (needed for geth source build) ──────────────────────
 
-echo "==> ensuring Go >= 1.23"
-remote bash -s << 'EOF'
+echo "==> ensuring Go $GO_VERSION"
+remote bash -s << EOF
   set -euo pipefail
-  if go version 2>/dev/null | grep -qE 'go1\.(2[3-9]|[3-9][0-9])'; then
-    echo "Go already up to date: $(go version)"
+  if /usr/local/go/bin/go version 2>/dev/null | grep -q "go$GO_VERSION"; then
+    echo "Go $GO_VERSION already installed"
     exit 0
   fi
-  GO_VER="1.23.4"
-  curl -fsSL "https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz" -o /tmp/go.tar.gz
-  echo "6924efde5de86fe277676e929dc9917d466efa02fb934197bc2eba35d5680971  /tmp/go.tar.gz" \
-    | sha256sum -c
+  echo "Installing Go $GO_VERSION…"
+  curl -fsSL "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tar.gz
+  echo "$GO_SHA256  /tmp/go.tar.gz" | sha256sum -c
   sudo rm -rf /usr/local/go
   sudo tar -C /usr/local -xzf /tmp/go.tar.gz
   rm /tmp/go.tar.gz
-  echo 'export PATH=$PATH:/usr/local/go/bin' | sudo tee /etc/profile.d/golang.sh
-  echo "Installed Go $GO_VER"
+  echo 'export PATH=\$PATH:/usr/local/go/bin' | sudo tee /etc/profile.d/golang.sh
+  echo "Installed Go $GO_VERSION"
 EOF
 
 # ── step 3: chakram system user + data directory ─────────────────────────────
@@ -149,7 +152,7 @@ EOF
 echo "==> building geth $GETH_VERSION (commit $GETH_COMMIT)"
 remote bash -s << EOF
   set -euo pipefail
-  export PATH="\$PATH:/usr/local/go/bin"
+  export PATH="/usr/local/go/bin:\$PATH"
 
   if geth version 2>/dev/null | grep -q "$GETH_VERSION"; then
     echo "geth $GETH_VERSION already installed"
@@ -283,7 +286,7 @@ if $IS_SEED1; then
   echo "==> setting up Caddy on $VM (seed-1)"
   remote sudo bash -s << 'EOF'
     set -euo pipefail
-    export PATH="$PATH:/usr/local/go/bin"
+    export PATH="/usr/local/go/bin:$PATH"
 
     if caddy version &>/dev/null; then
       echo "Caddy already installed: $(caddy version)"

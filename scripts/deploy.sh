@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
-# scripts/deploy.sh — deploy a tagged Chakram release to all testnet seed VMs.
+# scripts/deploy.sh — deploy a tagged Chakram release to testnet seed VMs.
 #
 # Usage:
 #   ./scripts/deploy.sh v2.0.1              # deploy to all three VMs
-#   ./scripts/deploy.sh v2.0.1 seed-2       # deploy to one VM only
+#   ./scripts/deploy.sh v2.0.1 seed-2       # deploy to one VM (short or full name)
 #
-# What it does on each VM (sequentially, not in parallel):
-#   1. Downloads chakram-linux-amd64 from the GitHub release
-#   2. Verifies the SHA256 against SHA256SUMS in the same release
-#   3. Installs to /usr/local/bin/chakram (atomic rename)
-#   4. Restarts chakram-testnet.service  (geth is NOT restarted)
-#   5. Tails journald for 15 s so you can confirm a clean startup
+# Flow (runs entirely from your Mac — no internet access required from VMs):
+#   1. Download chakram-linux-amd64 + SHA256SUMS from the GitHub release to /tmp
+#   2. Verify SHA256 locally before touching any VM
+#   3. For each VM: gcloud compute scp the binary, re-verify SHA256 on the VM,
+#      atomic-install to /usr/local/bin/chakram, restart chakram-testnet.service
+#
+# Works for both private and public repos — the gh CLI handles auth on your Mac.
+# The VMs never need to reach GitHub directly.
+#
+# Prerequisites:
+#   - gh CLI authenticated (gh auth status)
+#   - gcloud CLI authenticated with IAP-SSH access
+#   - GCP_PROJECT set in the environment
 
 set -euo pipefail
 
@@ -30,11 +37,36 @@ declare -A VM_ZONE=(
 
 VMS=("chakram-seed-1" "chakram-seed-2" "chakram-seed-3")
 if [[ "$TARGET_VM" != "all" ]]; then
-  # Accept short form (seed-1) or full form (chakram-seed-1)
   FULL_VM="chakram-${TARGET_VM#chakram-}"
-  [[ -z "${VM_ZONE[$FULL_VM]+_}" ]] && { echo "Unknown VM: $TARGET_VM"; exit 1; }
+  [[ -z "${VM_ZONE[$FULL_VM]+_}" ]] && { echo "error: unknown VM '$TARGET_VM'"; exit 1; }
   VMS=("$FULL_VM")
 fi
+
+# ── step 1: download release artifacts to Mac ─────────────────────────────────
+
+STAGING="/tmp/chakram-deploy-${TAG}"
+mkdir -p "$STAGING"
+trap 'rm -rf "$STAGING"' EXIT
+
+echo "==> downloading chakram-linux-amd64 and SHA256SUMS for $TAG"
+gh release download "$TAG" \
+  --repo "$REPO" \
+  --pattern "chakram-linux-amd64" \
+  --pattern "SHA256SUMS" \
+  --dir "$STAGING" \
+  --clobber
+
+# ── step 2: verify SHA256 locally ─────────────────────────────────────────────
+
+echo "==> verifying SHA256 locally"
+(cd "$STAGING" && sha256sum --check --ignore-missing SHA256SUMS)
+echo "    local checksum OK"
+
+# Extract the expected SHA for use in remote verification.
+EXPECTED_SHA=$(grep "chakram-linux-amd64" "$STAGING/SHA256SUMS" | awk '{print $1}')
+chmod 0755 "$STAGING/chakram-linux-amd64"
+
+# ── step 3: deploy to each VM ─────────────────────────────────────────────────
 
 deploy_one() {
   local VM="$1"
@@ -45,6 +77,16 @@ deploy_one() {
   echo "  Deploying $TAG → $VM  ($ZONE)"
   echo "══════════════════════════════════════════════════════"
 
+  # 3a. copy binary to VM
+  echo "[deploy] uploading chakram-linux-amd64 via IAP SCP"
+  gcloud compute scp \
+    "$STAGING/chakram-linux-amd64" \
+    "$VM:/tmp/chakram-new" \
+    --zone "$ZONE" \
+    --project "$GCP_PROJECT" \
+    --tunnel-through-iap
+
+  # 3b. verify on VM, install, restart
   gcloud compute ssh "$VM" \
     --zone "$ZONE" \
     --project "$GCP_PROJECT" \
@@ -52,57 +94,47 @@ deploy_one() {
     -- bash -s << EOF
   set -euo pipefail
 
-  TAG="$TAG"
-  REPO="$REPO"
+  EXPECTED="$EXPECTED_SHA"
 
-  # -- 1. download binary + checksum file ------------------------------------
-  TMPDIR=\$(mktemp -d)
-  trap 'rm -rf "\$TMPDIR"' EXIT
+  # Re-verify SHA256 after transfer (guards against SCP corruption).
+  ACTUAL=\$(sha256sum /tmp/chakram-new | awk '{print \$1}')
+  if [[ "\$ACTUAL" != "\$EXPECTED" ]]; then
+    echo "[deploy] CHECKSUM MISMATCH — aborting"
+    echo "  expected: \$EXPECTED"
+    echo "  got:      \$ACTUAL"
+    rm -f /tmp/chakram-new
+    exit 1
+  fi
+  echo "[deploy] remote checksum OK"
 
-  echo "[deploy] downloading chakram-linux-amd64 from release \$TAG"
-  curl -fsSL \
-    "https://github.com/\$REPO/releases/download/\$TAG/chakram-linux-amd64" \
-    -o "\$TMPDIR/chakram"
+  # Atomic install: move into place as root.
+  sudo install -o root -g root -m 0755 /tmp/chakram-new /usr/local/bin/chakram
+  rm -f /tmp/chakram-new
+  echo "[deploy] /usr/local/bin/chakram installed ($TAG)"
 
-  echo "[deploy] downloading SHA256SUMS"
-  curl -fsSL \
-    "https://github.com/\$REPO/releases/download/\$TAG/SHA256SUMS" \
-    -o "\$TMPDIR/SHA256SUMS"
-
-  # -- 2. verify checksum ----------------------------------------------------
-  cd "\$TMPDIR"
-  # SHA256SUMS may contain multiple entries; grep for the linux binary.
-  grep "chakram-linux-amd64" SHA256SUMS | sed 's/chakram-linux-amd64/chakram/' | sha256sum -c
-  echo "[deploy] checksum OK"
-
-  # -- 3. install atomically -------------------------------------------------
-  chmod 0755 chakram
-  sudo install -o root -g root -m 0755 chakram /usr/local/bin/chakram
-  echo "[deploy] /usr/local/bin/chakram installed (version: \$(chakram --version 2>&1 || echo unknown))"
-
-  # -- 4. restart consensus node (not geth) ----------------------------------
+  # Restart consensus node; geth is not touched.
   sudo systemctl restart chakram-testnet.service
   echo "[deploy] chakram-testnet.service restarted"
 
-  # -- 5. quick health check -------------------------------------------------
+  # Quick health check.
   sleep 3
   if sudo systemctl is-active --quiet chakram-testnet.service; then
     echo "[deploy] chakram-testnet.service is running ✓"
   else
-    echo "[deploy] WARNING: service not running — showing last 30 log lines:"
+    echo "[deploy] WARNING: service not running — last 30 log lines:"
     sudo journalctl -u chakram-testnet.service -n 30 --no-pager
     exit 1
   fi
 EOF
 
-  # Tail the logs from the Mac side for confirmation.
+  # Show the last few log lines from the Mac side for confirmation.
   echo ""
-  echo "  Last 20 log lines from $VM:"
+  echo "  Recent logs from $VM:"
   gcloud compute ssh "$VM" \
     --zone "$ZONE" \
     --project "$GCP_PROJECT" \
     --tunnel-through-iap \
-    -- sudo journalctl -u chakram-testnet.service -n 20 --no-pager
+    -- sudo journalctl -u chakram-testnet.service -n 15 --no-pager
 }
 
 for VM in "${VMS[@]}"; do
