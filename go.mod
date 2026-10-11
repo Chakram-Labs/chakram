@@ -5,6 +5,7 @@ go 1.26.3
 require (
 	git.gammaspectra.live/P2Pool/go-randomx v1.0.0
 	github.com/dgraph-io/badger/v4 v4.9.1
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	golang.org/x/crypto v0.41.0
 )
 

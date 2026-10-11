@@ -3,10 +3,14 @@ chakram-data/
 chakram-data-node*/
 
 # Compiled binaries
-chakram
-chakram-linux
-chakram-mac
-chakram-windows.exe
+/chakram
+/chakram-linux
+/chakram-mac
+/chakram-windows.exe
+/devnet
+/devnet-data/
+/testnet-data/
+/mainnet-data/
 
 # Wallet / key material — runtime files that must never be committed
 pnemonic.txt
@@ -14,6 +18,10 @@ wallet.json
 peers.json
 banned.json
 gcp-key.json
+
+# Testnet faucet private key — stored outside the repo; pattern guards against accidental inclusion
+testnet-faucet.key
+~/.chakram/testnet-faucet.key
 
 # Internal docs
 docs/
