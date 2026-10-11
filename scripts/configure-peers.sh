@@ -125,15 +125,26 @@ EOF
     install -o chakram -g chakram -m 0640 /tmp/geth-testnet.toml /etc/geth-testnet.toml
     rm /tmp/geth-testnet.toml
 
-    # Ensure the geth unit references --config (back-patching VMs set up with
-    # an older version of setup-vm.sh that lacked this flag).
+    # Back-patch geth unit for VMs set up with older versions of setup-vm.sh.
     UNIT=/etc/systemd/system/geth-testnet.service
-    if ! grep -q "\-\-config" "$UNIT"; then
-      # Insert --config line before the closing of ExecStart.
-      sed -i 's/--port 30303$/--port 30303 \\\n  --config \/etc\/geth-testnet.toml/' "$UNIT"
-      echo "  patched --config into geth unit on $(hostname)"
+    RELOAD=false
+
+    # Case A: very old unit (seed-3) — --maxpeers 0 is the last ExecStart line
+    # with no trailing backslash, and --port/--config are absent entirely.
+    if grep -q -- "--maxpeers 0$" "$UNIT"; then
+      sed -i 's/--maxpeers 0$/--maxpeers 25 \\\n  --port 30303 \\\n  --config \/etc\/geth-testnet.toml/' "$UNIT"
+      RELOAD=true
+      echo "  $(hostname): patched old unit (maxpeers 0→25, added --port 30303 + --config)"
     fi
-    systemctl daemon-reload
+
+    # Case B: unit has --port 30303 but no --config (intermediate version).
+    if grep -q -- "--port 30303" "$UNIT" && ! grep -q -- "--config" "$UNIT"; then
+      sed -i 's/--port 30303 \\/--port 30303 \\\n  --config \/etc\/geth-testnet.toml/' "$UNIT"
+      RELOAD=true
+      echo "  $(hostname): added --config to geth unit"
+    fi
+
+    $RELOAD && systemctl daemon-reload || true
 ENDSSH
 
   echo "  $VM: TOML written, geth unit OK"
