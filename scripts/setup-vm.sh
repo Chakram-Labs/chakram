@@ -49,7 +49,7 @@ declare -A VM_PEERS=(
 # Leave empty on seed-1 and seed-3 (they use --no-mine).
 declare -A VM_MINER_ADDR=(
   [chakram-seed-1]=""
-  [chakram-seed-2]=""           # TODO: fill in 0x… EVM address for seed-2 miner
+  [chakram-seed-2]="0x211508Df9A6e9371D2DbfaFa5Dab348795E6DCeA"
   [chakram-seed-3]=""
 )
 
