@@ -146,7 +146,7 @@ remote bash -s << EOF
   set -euo pipefail
   export PATH="/usr/local/go/bin:\$PATH"
 
-  if geth version 2>/dev/null | grep -q "$GETH_VERSION"; then
+  if /usr/local/bin/geth version 2>/dev/null | grep -qi "$GETH_COMMIT"; then
     echo "geth $GETH_VERSION already installed"
     exit 0
   fi
@@ -162,9 +162,11 @@ remote bash -s << EOF
   tar -xzf /tmp/geth.tar.gz -C /tmp
   cd /tmp/go-ethereum-${GETH_VERSION#v}
   go build -o /tmp/geth ./cmd/geth
+  go build -o /tmp/bootnode ./cmd/bootnode
   sudo install -o root -g root -m 0755 /tmp/geth /usr/local/bin/geth
-  rm -rf /tmp/geth /tmp/geth.tar.gz /tmp/go-ethereum-${GETH_VERSION#v}
-  echo "geth installed: \$(geth version | head -1)"
+  sudo install -o root -g root -m 0755 /tmp/bootnode /usr/local/bin/bootnode
+  rm -rf /tmp/geth /tmp/bootnode /tmp/geth.tar.gz /tmp/go-ethereum-${GETH_VERSION#v}
+  echo "geth installed: \$(geth version | grep 'Version:')"
 EOF
 
 # ── step 5: upload genesis file and initialise geth ──────────────────────────
@@ -221,7 +223,8 @@ ExecStart=/usr/local/bin/geth \
   --http.port 8545 \
   --http.api eth,net,web3 \
   --nodiscover \
-  --maxpeers 0
+  --maxpeers 25 \
+  --port 30303
 Restart=on-failure
 RestartSec=10s
 TimeoutStopSec=120s
