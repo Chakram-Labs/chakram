@@ -153,40 +153,27 @@ jobs:
           go build -o C:\geth_bin.exe ./cmd/geth
           Pop-Location
 
-      - name: Build Wails app (windows/amd64)
+      # Copy chakram + geth into bin/ BEFORE wails -nsis so its internal
+      # makensis run finds them. No -clean so these files survive the build.
+      - name: Stage extra binaries for installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "apps\miner\build\bin" | Out-Null
+          Copy-Item chakram_bin.exe "apps\miner\build\bin\chakram.exe"
+          Copy-Item C:\geth_bin.exe  "apps\miner\build\bin\geth.exe"
+
+      - name: Build Wails app + NSIS installer (windows/amd64)
         working-directory: apps/miner
         shell: pwsh
         run: |
           $env:PATH = "$env:USERPROFILE\go\bin;$env:PATH"
-          wails build -platform windows/amd64 -clean
+          wails build -platform windows/amd64 -nsis
 
-      - name: Copy extra binaries
+      - name: Rename installer
         shell: pwsh
         run: |
-          $bin = "apps\miner\build\bin"
-          Copy-Item chakram_bin.exe "$bin\chakram.exe"
-          Copy-Item C:\geth_bin.exe  "$bin\geth.exe"
-
-      - name: Download WebView2 bootstrapper
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force "apps\miner\build\windows\installer\tmp" | Out-Null
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" `
-            -OutFile "apps\miner\build\windows\installer\tmp\MicrosoftEdgeWebview2Setup.exe"
-
-      - name: Build NSIS installer
-        shell: pwsh
-        working-directory: apps/miner/build
-        run: |
-          makensis `
-            "-DARG_WAILS_AMD64_BINARY=..\..\bin\ChakramMiner.exe" `
-            "-DINFO_PROJECTNAME=ChakramMiner" `
-            "-DINFO_COMPANYNAME=Chakram Labs" `
-            "-DINFO_PRODUCTNAME=Chakram Miner" `
-            "-DINFO_PRODUCTVERSION=2.0.0" `
-            "-DINFO_COPYRIGHT=© 2026 Chakram Labs" `
-            windows\installer\project.nsi
-          Move-Item bin\ChakramMiner-amd64-installer.exe bin\ChakramMiner-Setup-x64.exe
+          Move-Item "apps\miner\build\bin\ChakramMiner-amd64-installer.exe" `
+                    "apps\miner\build\bin\ChakramMiner-Setup-x64.exe"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
