@@ -17,10 +17,12 @@ type BlockStore interface {
 
 // StatusResponse is returned by GET /status.
 type StatusResponse struct {
-	Height      uint64 `json:"height"`
-	TipHash     string `json:"tipHash"`
-	ChainID     uint64 `json:"chainId"`     // EIP-155 chain ID
-	GenesisHash string `json:"genesisHash"` // EVM genesis block hash (keccak256)
+	Height           uint64  `json:"height"`
+	TipHash          string  `json:"tipHash"`
+	ChainID          uint64  `json:"chainId"`          // EIP-155 chain ID
+	GenesisHash      string  `json:"genesisHash"`      // EVM genesis block hash (keccak256)
+	Difficulty       uint64  `json:"difficulty"`       // tip block RandomX difficulty
+	AvgBlockTimeSecs float64 `json:"avgBlockTimeSecs"` // rolling avg over last 20 blocks (0 if < 2 blocks)
 }
 
 // WireBlock is the JSON encoding of a consensus block sent over the network.

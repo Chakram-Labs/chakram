@@ -215,11 +215,32 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no tip", http.StatusServiceUnavailable)
 		return
 	}
+
+	var difficulty uint64
+	var avgBlockTimeSecs float64
+	if tip, err := s.store.GetBlockByHeight(tipHeight); err == nil {
+		difficulty = tip.Header.Difficulty
+		if tipHeight >= 1 {
+			lookback := uint64(20)
+			if tipHeight < lookback {
+				lookback = tipHeight
+			}
+			if old, err := s.store.GetBlockByHeight(tipHeight - lookback); err == nil {
+				dt := tip.Header.Timestamp - old.Header.Timestamp
+				if dt > 0 {
+					avgBlockTimeSecs = float64(dt) / float64(lookback)
+				}
+			}
+		}
+	}
+
 	jsonOK(w, StatusResponse{
-		Height:      tipHeight,
-		TipHash:     consensus.HashToHex(tipHash),
-		ChainID:     s.chainID,
-		GenesisHash: s.genesisHash,
+		Height:           tipHeight,
+		TipHash:          consensus.HashToHex(tipHash),
+		ChainID:          s.chainID,
+		GenesisHash:      s.genesisHash,
+		Difficulty:       difficulty,
+		AvgBlockTimeSecs: avgBlockTimeSecs,
 	})
 }
 

@@ -217,26 +217,56 @@ func (a *App) peerPingLoop() {
 	}
 }
 
-// minedBlocksLoop polls the local chakram node's /minedblocks endpoint every
-// 30 seconds to get the all-time count of blocks mined by the configured address.
-// This is accurate across restarts and doesn't rely on log parsing.
+// minedBlocksLoop counts blocks mined by the configured address.
+// Primary: chakram /minedblocks endpoint (efficient server-side cache).
+// Fallback: incremental geth block scan (works even with old chakram binary).
 func (a *App) minedBlocksLoop() {
+	var gethScanned uint64
+	var gethCount uint64
+
 	check := func() {
-		a.mu.RLock()
 		addr := a.cfg.MinerAddress
-		a.mu.RUnlock()
 		if addr == "" {
 			return
 		}
-		ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
-		defer cancel()
-		count, err := a.chk.MinedBlockCount(ctx, addr)
-		if err != nil {
-			return // chakram not yet running
+
+		// Primary: chakram /minedblocks
+		{
+			ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+			count, err := a.chk.MinedBlockCount(ctx, addr)
+			cancel()
+			if err == nil && count > 0 {
+				a.mu.Lock()
+				a.blocksFound = int(count)
+				a.mu.Unlock()
+				return
+			}
 		}
-		a.mu.Lock()
-		a.blocksFound = int(count)
-		a.mu.Unlock()
+
+		// Fallback: scan geth blocks incrementally from last scanned height.
+		{
+			ctx, cancel := context.WithTimeout(a.ctx, 15*time.Second)
+			defer cancel()
+			tip, err := a.geth.BlockNumber(ctx)
+			if err != nil {
+				return
+			}
+			for h := gethScanned + 1; h <= tip; h++ {
+				blk, err := a.geth.GetBlockByNumber(ctx, h)
+				if err != nil {
+					break
+				}
+				if strings.EqualFold(blk.Miner, addr) {
+					gethCount++
+				}
+				gethScanned = h
+			}
+			if gethCount > 0 {
+				a.mu.Lock()
+				a.blocksFound = int(gethCount)
+				a.mu.Unlock()
+			}
+		}
 	}
 	check()
 	ticker := time.NewTicker(30 * time.Second)
@@ -302,6 +332,10 @@ func (a *App) GetStatus() AppStatus {
 		}
 		if chkStatus, err := a.chk.Status(ctx); err == nil {
 			status.ConsensusHeight = chkStatus.Height
+			// Network hashrate from chakram difficulty (geth blocks have difficulty=0 post-merge).
+			if chkStatus.AvgBlockTimeSecs > 0 && chkStatus.Difficulty > 0 {
+				status.NetworkHashrate = float64(chkStatus.Difficulty) / chkStatus.AvgBlockTimeSecs
+			}
 		}
 		if a.cfg.MinerAddress != "" {
 			if bal, err := a.geth.GetBalance(ctx, a.cfg.MinerAddress); err == nil {
@@ -312,7 +346,6 @@ func (a *App) GetStatus() AppStatus {
 			a.mu.Lock()
 			a.recentBlocks = blocks
 			a.mu.Unlock()
-			status.NetworkHashrate = estimateNetworkHashrate(blocks)
 		}
 
 		if !status.IsSynced && status.SyncPct < 99.9 {
@@ -501,30 +534,6 @@ func weiToCHK(wei *big.Int) string {
 	return fmt.Sprintf("%d.%06d", whole, frac)
 }
 
-func estimateNetworkHashrate(blocks []node.GethBlock) float64 {
-	if len(blocks) < 2 {
-		return 0
-	}
-	n := len(blocks)
-	if n > 10 {
-		n = 10
-		blocks = blocks[:10]
-	}
-	newest := blocks[0].Timestamp
-	oldest := blocks[n-1].Timestamp
-	if oldest >= newest {
-		return 0
-	}
-	avgTime := float64(newest-oldest) / float64(n-1)
-	if avgTime == 0 {
-		return 0
-	}
-	diff := new(big.Int)
-	d := strings.TrimPrefix(blocks[0].Difficulty, "0x")
-	diff.SetString(d, 16)
-	f, _ := new(big.Float).SetInt(diff).Float64()
-	return f / avgTime
-}
 
 func openFolder(dir string) {
 	switch runtime.GOOS {

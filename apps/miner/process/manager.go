@@ -461,10 +461,22 @@ func (m *Manager) Stop() {
 	log.Println("[manager] Stop(): done, state=Idle")
 }
 
+func networkID(network string) string {
+	switch network {
+	case "testnet":
+		return "11640"
+	case "mainnet":
+		return "1164"
+	default:
+		return "11641" // devnet
+	}
+}
+
 func (m *Manager) buildGethCmd(gethBin, dataDir, jwtPath string) *exec.Cmd {
 	bootnodes := resolveBootnodes(gethBootnodesDomain, fallbackBootnodes)
 	return exec.Command(gethBin,
 		"--datadir", dataDir,
+		"--networkid", networkID(m.cfg.Network),
 		"--syncmode", "full",
 		"--state.scheme", "hash",
 		"--gcmode", "archive",

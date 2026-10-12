@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -32,6 +33,22 @@ func signalProcess(proc *os.Process) bool {
 	}
 	syscall.CloseHandle(handle)
 	return true
+}
+
+// processNameOfPIDWin returns the bare exe name for a Windows PID via tasklist.
+func processNameOfPIDWin(pid int) string {
+	out, err := exec.Command("tasklist", "/FI",
+		fmt.Sprintf("PID eq %d", pid), "/FO", "CSV", "/NH").Output()
+	if err != nil {
+		return ""
+	}
+	// CSV line: "geth.exe","43279","Console","1","..."
+	line := strings.TrimSpace(string(out))
+	if line == "" {
+		return ""
+	}
+	parts := strings.SplitN(line, ",", 2)
+	return strings.Trim(parts[0], `"`)
 }
 
 // exePathOfPID returns the executable path for a Windows PID via wmic.
@@ -97,8 +114,20 @@ func killOnPort(port int, knownPIDs map[int]string, ownedBins []string) error {
 			}
 		}
 
-		return fmt.Errorf("port %d is already in use by another program (PID %d). "+
-			"Please stop it before starting the miner.", port, pid)
+		// Check 3: wmic unavailable or path mismatch — fall back to process name.
+		if exeErr != nil {
+			procName := processNameOfPIDWin(pid)
+			for _, bin := range ownedBins {
+				if strings.EqualFold(filepath.Base(bin), procName) {
+					log.Printf("[manager] killOnPort: killing orphan pid=%d name=%q (name match) on port %d", pid, procName, port)
+					exec.Command("taskkill", "/F", "/PID", strconv.Itoa(pid)).Run() //nolint:errcheck
+					goto next
+				}
+			}
+		}
+
+		return fmt.Errorf("port %d is in use by another program (PID %d). "+
+			"Stop it first: taskkill /F /PID %d", port, pid, pid)
 
 	next:
 	}

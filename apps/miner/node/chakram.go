@@ -14,10 +14,12 @@ type ChakramClient struct {
 }
 
 type ChakramStatus struct {
-	Height      uint64 `json:"height"`
-	TipHash     string `json:"tipHash"`
-	ChainID     uint64 `json:"chainId"`
-	GenesisHash string `json:"genesisHash"`
+	Height           uint64  `json:"height"`
+	TipHash          string  `json:"tipHash"`
+	ChainID          uint64  `json:"chainId"`
+	GenesisHash      string  `json:"genesisHash"`
+	Difficulty       uint64  `json:"difficulty"`
+	AvgBlockTimeSecs float64 `json:"avgBlockTimeSecs"`
 }
 
 func NewChakramClient(url string) *ChakramClient {

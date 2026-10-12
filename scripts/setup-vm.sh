@@ -220,7 +220,7 @@ ExecStart=/usr/local/bin/geth \
   --http.addr 127.0.0.1 \
   --http.port 8545 \
   --http.api eth,net,web3 \
-  --nodiscover \
+  --networkid 11640 \
   --maxpeers 25 \
   --port 30303 \
   --config /etc/geth-testnet.toml

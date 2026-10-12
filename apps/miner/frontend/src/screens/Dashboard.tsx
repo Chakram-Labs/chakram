@@ -110,7 +110,7 @@ export default function Dashboard({ status, onNavigate }: Props) {
             value={status.hashrate > 0 ? fmtHashrate(status.hashrate)
               : (status.isMining && status.processState === 'Running' ? 'Warming up…' : '—')}
             sub="this session" accent />
-          <StatCard label="My Blocks" value={String(status.blocksFound)} sub="this session" />
+          <StatCard label="My Blocks" value={String(status.blocksFound)} sub="all time" />
           <StatCard label="Balance" value={status.balanceCHK || '0.000000'} sub="CHK" />
           <StatCard label="Network H/s" value={status.networkHashrate > 0 ? fmtHashrate(status.networkHashrate) : '—'} />
         </div>
