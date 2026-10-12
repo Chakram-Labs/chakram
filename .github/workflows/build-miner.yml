@@ -173,6 +173,11 @@ jobs:
         run: |
           makensis `
             "-DARG_WAILS_AMD64_BINARY=..\..\bin\ChakramMiner.exe" `
+            "-DINFO_PROJECTNAME=ChakramMiner" `
+            "-DINFO_COMPANYNAME=Chakram Labs" `
+            "-DINFO_PRODUCTNAME=Chakram Miner" `
+            "-DINFO_PRODUCTVERSION=2.0.0" `
+            "-DINFO_COPYRIGHT=© 2026 Chakram Labs" `
             windows\installer\project.nsi
           Move-Item bin\ChakramMiner-amd64-installer.exe bin\ChakramMiner-Setup-x64.exe
 
@@ -191,7 +196,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - uses: actions/download-artifact@fa0a91b85d4f404e444306234a1c3ca299ad2946
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
