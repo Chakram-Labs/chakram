@@ -8,6 +8,7 @@ on:
       - 'cmd/chakram/**'
       - 'consensus/**'
       - 'engine/**'
+      - '.github/workflows/build-miner.yml'
   workflow_dispatch:
     inputs:
       version:
