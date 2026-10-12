@@ -167,6 +167,13 @@ jobs:
           Copy-Item chakram_bin.exe "$bin\chakram.exe"
           Copy-Item C:\geth_bin.exe  "$bin\geth.exe"
 
+      - name: Download WebView2 bootstrapper
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "apps\miner\build\tmp" | Out-Null
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" `
+            -OutFile "apps\miner\build\tmp\MicrosoftEdgeWebview2Setup.exe"
+
       - name: Build NSIS installer
         shell: pwsh
         working-directory: apps/miner/build
