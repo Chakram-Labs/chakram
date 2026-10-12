@@ -100,12 +100,93 @@ jobs:
           name: miner-macos-arm64
           path: apps/miner/build/bin/ChakramMiner-macOS-arm64.dmg
 
+# ── Windows x64 ──────────────────────────────────────────────────────────────
+  build-windows:
+    name: Windows x64
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            go.sum
+            apps/miner/go.sum
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+
+      - name: Install tools (NSIS, MinGW, Wails)
+        shell: pwsh
+        run: |
+          choco install nsis mingw -y --no-progress
+          "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin" >> $env:GITHUB_PATH
+          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Build chakram (windows/amd64)
+        shell: pwsh
+        run: go build -o chakram_bin.exe ./cmd/chakram/
+        env:
+          CGO_ENABLED: '1'
+          GOOS: windows
+          GOARCH: amd64
+
+      - name: Cache geth binary
+        id: cache-geth
+        uses: actions/cache@v4
+        with:
+          path: C:\geth_bin.exe
+          key: geth-windows-amd64-${{ env.GETH_VERSION }}-${{ env.GETH_COMMIT }}
+
+      - name: Build geth (windows/amd64)
+        if: steps.cache-geth.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ver = "${{ env.GETH_VERSION }}".TrimStart('v')
+          Invoke-WebRequest `
+            "https://github.com/ethereum/go-ethereum/archive/refs/tags/${{ env.GETH_VERSION }}.zip" `
+            -OutFile C:\geth_src.zip
+          Expand-Archive C:\geth_src.zip -DestinationPath C:\
+          Push-Location "C:\go-ethereum-$ver"
+          go build -o C:\geth_bin.exe ./cmd/geth
+          Pop-Location
+
+      - name: Build Wails app (windows/amd64)
+        working-directory: apps/miner
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:USERPROFILE\go\bin;$env:PATH"
+          wails build -platform windows/amd64 -clean
+
+      - name: Copy extra binaries
+        shell: pwsh
+        run: |
+          $bin = "apps\miner\build\bin"
+          Copy-Item chakram_bin.exe "$bin\chakram.exe"
+          Copy-Item C:\geth_bin.exe  "$bin\geth.exe"
+
+      - name: Build NSIS installer
+        shell: pwsh
+        working-directory: apps/miner/build
+        run: |
+          makensis `
+            "-DARG_WAILS_AMD64_BINARY=..\..\bin\ChakramMiner.exe" `
+            windows\installer\project.nsi
+          Move-Item bin\ChakramMiner-amd64-installer.exe bin\ChakramMiner-Setup-x64.exe
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: miner-windows
+          path: apps/miner/build/bin/ChakramMiner-Setup-x64.exe
+
 # ── Release ───────────────────────────────────────────────────────────────────
 # Every push → rolling "miner-latest" pre-release (overwritten each time).
 # workflow_dispatch with a version → proper named release (e.g. v2.0.1).
   release:
     name: Create Release
-    needs: [build-macos-arm64]
+    needs: [build-macos-arm64, build-windows]
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -152,7 +233,8 @@ jobs:
 
           | Platform | Download |
           |---|---|
-          | macOS Apple Silicon | ChakramMiner-macOS-arm64.dmg |" \
+          | macOS Apple Silicon | ChakramMiner-macOS-arm64.dmg |
+          | Windows | ChakramMiner-Setup-x64.exe (one-click installer) |" \
             artifacts/*
 
       - name: Create versioned release (workflow_dispatch)
@@ -169,5 +251,6 @@ jobs:
 
           | Platform | Download |
           |---|---|
-          | macOS Apple Silicon | ChakramMiner-macOS-arm64.dmg |" \
+          | macOS Apple Silicon | ChakramMiner-macOS-arm64.dmg |
+          | Windows | ChakramMiner-Setup-x64.exe (one-click installer) |" \
             artifacts/*
