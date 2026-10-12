@@ -170,9 +170,9 @@ jobs:
       - name: Download WebView2 bootstrapper
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "apps\miner\build\tmp" | Out-Null
+          New-Item -ItemType Directory -Force "apps\miner\build\windows\installer\tmp" | Out-Null
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" `
-            -OutFile "apps\miner\build\tmp\MicrosoftEdgeWebview2Setup.exe"
+            -OutFile "apps\miner\build\windows\installer\tmp\MicrosoftEdgeWebview2Setup.exe"
 
       - name: Build NSIS installer
         shell: pwsh
