@@ -24,7 +24,7 @@ import (
 func TestInitialCompactTargetsUnchanged(t *testing.T) {
 	const (
 		wantMainnet  uint64 = 0x2010000000000000 // 2^252 — mainnet genesis
-		wantTestnet  uint64 = 0x1F10000000000000 // 2^244 — testnet genesis (4,096 expected hashes; bootstrap gap always binds at 3 miners)
+		wantTestnet  uint64 = 0x1F015A0000000000 // ≈2^240.4 — testnet genesis (48,489 expected hashes; 15.02 s at 3×1,076 H/s)
 		wantCP5      uint64 = 0x1f40000000000000 // 2^246 — CP5 orphan-rate baseline
 	)
 	if InitialCompactTargetV2 != wantMainnet {

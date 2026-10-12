@@ -305,6 +305,12 @@ if $IS_SEED1; then
     install -d -o caddy -g caddy -m 0755 /etc/caddy
     install -d -o caddy -g caddy -m 0700 /var/lib/caddy
     install -d -o caddy -g caddy -m 0755 /var/log/caddy
+    # TLS cert/state storage for the caddy user (no $HOME available).
+    install -d -o caddy -g caddy -m 0700 /var/lib/caddy/.local
+    install -d -o caddy -g caddy -m 0700 /var/lib/caddy/.local/share
+    install -d -o caddy -g caddy -m 0700 /var/lib/caddy/.local/share/caddy
+    install -d -o caddy -g caddy -m 0700 /var/lib/caddy/.config
+    install -d -o caddy -g caddy -m 0700 /var/lib/caddy/.config/caddy
 EOF
 
   upload scripts/Caddyfile /tmp/Caddyfile
@@ -328,6 +334,13 @@ TimeoutStopSec=10s
 Restart=on-failure
 RestartSec=5s
 ReadWritePaths=/var/lib/caddy /var/log/caddy
+# Allow non-root binding of port 443.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+# Point Caddy's cert/state storage at /var/lib/caddy (no $HOME for this user).
+Environment=HOME=/var/lib/caddy
+Environment=XDG_DATA_HOME=/var/lib/caddy/.local/share
+Environment=XDG_CONFIG_HOME=/var/lib/caddy/.config
 
 [Install]
 WantedBy=multi-user.target

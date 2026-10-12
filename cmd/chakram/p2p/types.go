@@ -108,6 +108,11 @@ type LocatorResponse struct {
 	CommonHeight uint64 `json:"commonHeight"`
 }
 
+// PeersResponse is returned by GET /peers.
+type PeersResponse struct {
+	Peers []string `json:"peers"`
+}
+
 // BuildLocator builds a Bitcoin-style block locator for the given tip height.
 // hashAt must return the canonical block hash at the requested height.
 //

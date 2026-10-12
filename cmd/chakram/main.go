@@ -34,6 +34,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -63,6 +64,10 @@ type networkCfg struct {
 	initialTarget     uint64
 	defaultDataDir    string
 	defaultListenAddr string
+	// seedsDomain is the DNS name queried for bootstrap peer URLs at startup.
+	// TXT records must contain space-separated http:// URLs.
+	// Empty disables DNS bootstrap (devnet / private networks).
+	seedsDomain string
 }
 
 // networks is the authoritative mapping from --network value to config.
@@ -84,6 +89,7 @@ var networks = map[string]networkCfg{
 		initialTarget:     consensus.TestnetInitialCompactTarget,
 		defaultDataDir:    "testnet-data",
 		defaultListenAddr: ":9101",
+		seedsDomain:       "seeds.chakram.one",
 	},
 	"mainnet": {
 		name:              "mainnet",
@@ -93,6 +99,7 @@ var networks = map[string]networkCfg{
 		initialTarget:     consensus.InitialCompactTargetV2,
 		defaultDataDir:    "mainnet-data",
 		defaultListenAddr: ":9102",
+		seedsDomain:       "seeds.chakram.one",
 	},
 }
 
@@ -116,8 +123,6 @@ func main() {
 		initialTargetS = flag.String("initial-target", "", "devnet only: override genesis compact target (hex); only applies to a fresh DB")
 	)
 	flag.Parse()
-	_ = noDiscover // reserved for Phase 4 seed node implementation
-
 	net, ok := networks[*networkName]
 	if !ok {
 		fmt.Fprintf(os.Stderr, "error: unknown --network %q (valid: devnet, testnet, mainnet)\n", *networkName)
@@ -184,13 +189,13 @@ func main() {
 		}
 	}
 
-	if err := run(ctx, net, dir, *authrpc, *rpc, *jwt, *minerHex, listenAddr, *peersFlag, *noMine, *light, numThreads, initialTarget); err != nil && !errors.Is(err, context.Canceled) {
+	if err := run(ctx, net, dir, *authrpc, *rpc, *jwt, *minerHex, listenAddr, *peersFlag, *noDiscover, *noMine, *light, numThreads, initialTarget); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("fatal: %v", err)
 	}
 	log.Printf("%s node stopped cleanly", net.name)
 }
 
-func run(ctx context.Context, net networkCfg, dataDir, authrpc, rpcURL, jwtFile, minerHex, listenAddr, peersStr string, noMine, lightMode bool, numThreads int, initialTarget uint64) error {
+func run(ctx context.Context, net networkCfg, dataDir, authrpc, rpcURL, jwtFile, minerHex, listenAddr, peersStr string, noDiscover, noMine, lightMode bool, numThreads int, initialTarget uint64) error {
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 
 	// ── 1. wait for geth and verify genesis ──────────────────────────────────
@@ -238,7 +243,20 @@ func run(ctx context.Context, net networkCfg, dataDir, authrpc, rpcURL, jwtFile,
 	log.Printf("miner address: %s", minerHex)
 
 	// ── 7. P2P layer ──────────────────────────────────────────────────────────
-	peerClients := buildPeerClients(peersStr)
+
+	// PeerManager: DNS seeds → disk cache → explicit --peers flag.
+	// This gives Bitcoin-style bootstrap: only domain names are baked in; IPs
+	// live in DNS and can be updated without releasing a new binary.
+	peerStore := filepath.Join(dataDir, "peers.json")
+	pm := p2p.NewPeerManager(peerStore, net.chainID, net.genesisHashHex)
+	pm.LoadFromDisk()
+	if !noDiscover {
+		pm.LoadDNS(net.seedsDomain)
+	}
+	if peersStr != "" {
+		pm.Seed(strings.Split(peersStr, ","))
+	}
+	log.Printf("[p2p] peer discovery: %d known peer(s)", pm.Count())
 
 	// engineMu serialises all Engine API calls (newPayloadV3 + FCU) and the
 	// associated canonical-chain store writes. Shared between makeAcceptFunc
@@ -248,7 +266,7 @@ func run(ctx context.Context, net networkCfg, dataDir, authrpc, rpcURL, jwtFile,
 	acceptFn := makeAcceptFunc(client, store, &engineMu)
 
 	relayFn := func(b *consensus.ConsensusBlock) {
-		for _, peer := range peerClients {
+		for _, peer := range pm.ActiveClients() {
 			go func(c *p2p.Client) {
 				pushCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
@@ -266,7 +284,7 @@ func run(ctx context.Context, net networkCfg, dataDir, authrpc, rpcURL, jwtFile,
 		// epoch N-1 (late arrivals, reorg candidates) can be verified without
 		// re-initialising when the miner has already advanced to epoch N.
 		verifyPow := newEpochVerifier(func() consensus.PoWEngine {
-			return newRandomXEngine(lightMode)
+			return newRandomXEngine(lightMode, "verify")
 		})
 		defer verifyPow.Close()
 		var verifyMu sync.Mutex
@@ -296,6 +314,7 @@ func run(ctx context.Context, net networkCfg, dataDir, authrpc, rpcURL, jwtFile,
 			p2p.WithPoWValidator(powValidator),
 			p2p.WithChainID(net.chainID),
 			p2p.WithGenesisHash(net.genesisHashHex),
+			p2p.WithPeerManager(pm),
 		)
 		go func() {
 			log.Printf("[p2p] listening on %s", listenAddr)
@@ -306,23 +325,28 @@ func run(ctx context.Context, net networkCfg, dataDir, authrpc, rpcURL, jwtFile,
 		}()
 	}
 
+	// Peer exchange loop: periodically query known peers' /peers endpoints to
+	// discover new nodes organically — no hardcoded IPs required after bootstrap.
+	go pm.ExchangeLoop(ctx)
+
 	// IBD: sync from the best peer if we are behind. Retried in background
 	// because peers may not be listening yet at startup time.
-	if len(peerClients) > 0 {
-		go func() {
-			for {
-				if err := syncFromPeers(ctx, store, syncer, peerClients,
+	go func() {
+		for {
+			peers := pm.ActiveClients()
+			if len(peers) > 0 {
+				if err := syncFromPeers(ctx, store, syncer, peers,
 					net.chainID, net.genesisHashHex); err != nil {
 					log.Printf("[p2p] IBD sync error: %v", err)
 				}
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(15 * time.Second):
-				}
 			}
-		}()
-	}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(15 * time.Second):
+			}
+		}
+	}()
 
 	// ── 8. periodic stats (every 60 s) ───────────────────────────────────────
 	go func() {
@@ -790,22 +814,6 @@ func printStats(ctx context.Context, cl *http.Client, rpcURL string, store *cons
 
 	log.Printf("[stats] height=%d  avg-block-time=%.2fs  balance=%s wei  expected=%s wei  drift=%s wei  %s",
 		gethHeight, avg, balWei, expectedWei, driftWei, syncStr)
-}
-
-// buildPeerClients parses a comma-separated list of peer URLs and returns
-// one p2p.Client per peer. Empty or blank entries are ignored.
-func buildPeerClients(peersStr string) []*p2p.Client {
-	if peersStr == "" {
-		return nil
-	}
-	var clients []*p2p.Client
-	for _, u := range strings.Split(peersStr, ",") {
-		u = strings.TrimSpace(u)
-		if u != "" {
-			clients = append(clients, p2p.NewClient(u))
-		}
-	}
-	return clients
 }
 
 // makeAcceptFunc returns an AcceptFunc that calls newPayloadV3 and

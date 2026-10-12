@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -487,8 +488,90 @@ type closurePow struct {
 	hashFn func(int, []byte) []byte
 }
 
-func (c *closurePow) NumMiningThreads() int                    { return c.n }
-func (c *closurePow) HashOnThread(i int, b []byte) []byte      { return c.hashFn(i, b) }
+func (c *closurePow) NumMiningThreads() int               { return c.n }
+func (c *closurePow) HashOnThread(i int, b []byte) []byte { return c.hashFn(i, b) }
+
+// ── TestNoReinitWithinEpoch ───────────────────────────────────────────────────
+
+// countingPoW mirrors the bytes.Equal guard used by randomXEngine.Init so that
+// it counts only "real" initialisations — calls that bypass the no-op guard
+// because the key changed.  It does not depend on CGo and runs on all platforms.
+type countingPoW struct {
+	mu      sync.Mutex
+	lastKey []byte
+	count   int32 // real inits (atomic)
+}
+
+func (p *countingPoW) Init(key []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if bytes.Equal(p.lastKey, key) {
+		return nil // same guard as randomXEngine
+	}
+	atomic.AddInt32(&p.count, 1)
+	p.lastKey = append(p.lastKey[:0], key...)
+	return nil
+}
+func (p *countingPoW) Hash(_ []byte) []byte { return make([]byte, 32) }
+func (p *countingPoW) Close()               {}
+
+// TestNoReinitWithinEpoch verifies two invariants:
+//
+//  1. EpochKey returns an identical byte slice for every height in epoch 0
+//     (heights 1–2047), so the mining engine's bytes.Equal guard will fire
+//     for all but the very first Init call.
+//
+//  2. Calling Init(epochKey) on a fresh PoW engine 10 times with heights all
+//     in epoch 0 triggers exactly one real initialisation.
+//
+// If EpochKey ever returned a different value for a same-epoch height — e.g.
+// because blockHashAt unexpectedly returned a different hash — the guard would
+// miss, Init would allocate a new RandomX cache, and mining would stall for
+// ~8 s per block rather than per epoch.
+func TestNoReinitWithinEpoch(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t)
+	_ = seedTestGenesis(t, store)
+
+	// Heights spanning the full epoch-0 range (1 to RandomXEpochLen-1).
+	heights := []uint64{1, 2, 10, 100, 500, 1000, 1500, 2000, 2046, 2047}
+
+	// Part 1: all heights in epoch 0 must produce the same epoch key.
+	var firstKey []byte
+	for _, h := range heights {
+		key, err := consensus.EpochKey(h, store.BlockHashAt())
+		if err != nil {
+			t.Fatalf("EpochKey(%d): %v", h, err)
+		}
+		if firstKey == nil {
+			firstKey = key
+			continue
+		}
+		if !bytes.Equal(firstKey, key) {
+			t.Errorf("EpochKey(%d) differs from EpochKey(%d) — both are in epoch 0\n  got  %x\n  want %x",
+				h, heights[0], key, firstKey)
+		}
+	}
+
+	// Part 2: feeding these keys into a PoW engine one at a time must trigger
+	// exactly one real init (the first call), leaving all subsequent calls as
+	// no-ops due to the bytes.Equal guard.
+	pow := &countingPoW{}
+	for _, h := range heights {
+		key, err := consensus.EpochKey(h, store.BlockHashAt())
+		if err != nil {
+			t.Fatalf("EpochKey(%d): %v", h, err)
+		}
+		if err := pow.Init(key); err != nil {
+			t.Fatalf("Init height %d: %v", h, err)
+		}
+	}
+	if got := atomic.LoadInt32(&pow.count); got != 1 {
+		t.Errorf("Init triggered %d real allocation(s) for %d heights in epoch 0; want exactly 1",
+			got, len(heights))
+	}
+}
 
 // TestBlockFromResultHashIsSHA256Squared verifies that a mined block's identity
 // is SHA256²(header), not the RandomX PoW hash.

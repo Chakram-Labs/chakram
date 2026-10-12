@@ -1,0 +1,346 @@
+name: Build Chakram Miner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/miner/**'
+      - 'cmd/chakram/**'
+      - 'consensus/**'
+      - 'lib/**'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag (e.g. v2.0.1). Leave empty to skip release.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  GETH_VERSION: v1.17.6
+  GETH_COMMIT: 3d84c6b2e3e9be032f8f2dcd9e900f89391fcdab
+  GO_VERSION: '1.26'
+
+# ── macOS arm64 ──────────────────────────────────────────────────────────────
+jobs:
+  build-macos-arm64:
+    name: macOS arm64
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/setup-go@0aaccfd150d50ccaeb0b1c59f4d4ab7826e8cf37
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: apps/miner/go.sum
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.9.2
+
+      - name: Build chakram (darwin/arm64)
+        run: go build -o chakram_bin ./cmd/chakram/
+        env:
+          CGO_ENABLED: '1'
+          GOOS: darwin
+          GOARCH: arm64
+
+      - name: Build geth (darwin/arm64)
+        run: |
+          curl -fsSL -o /tmp/geth.tar.gz \
+            "https://github.com/ethereum/go-ethereum/archive/refs/tags/${{ env.GETH_VERSION }}.tar.gz"
+          tar -xzf /tmp/geth.tar.gz -C /tmp
+          cd /tmp/go-ethereum-${GETH_VERSION#v}
+          go build -o /tmp/geth_bin ./cmd/geth
+
+      - name: Build Wails app
+        working-directory: apps/miner
+        run: ~/go/bin/wails build -platform darwin/arm64 -clean
+
+      - name: Bundle binaries into .app
+        run: |
+          BUNDLE="apps/miner/build/bin/ChakramMiner.app/Contents/MacOS"
+          cp chakram_bin  "$BUNDLE/chakram"
+          cp /tmp/geth_bin "$BUNDLE/geth"
+          chmod +x "$BUNDLE/chakram" "$BUNDLE/geth"
+          codesign --force --deep --sign - "apps/miner/build/bin/ChakramMiner.app"
+
+      - name: Create DMG
+        working-directory: apps/miner/build/bin
+        run: |
+          brew install create-dmg
+          create-dmg \
+            --volname "Chakram Miner" \
+            --window-size 540 380 \
+            --icon-size 80 \
+            --icon "ChakramMiner.app" 130 190 \
+            --app-drop-link 410 190 \
+            "ChakramMiner-macOS-arm64.dmg" \
+            "ChakramMiner.app"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: miner-macos-arm64
+          path: apps/miner/build/bin/ChakramMiner-macOS-arm64.dmg
+
+# ── macOS x64 ────────────────────────────────────────────────────────────────
+  build-macos-x64:
+    name: macOS x64
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/setup-go@0aaccfd150d50ccaeb0b1c59f4d4ab7826e8cf37
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: apps/miner/go.sum
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.9.2
+
+      - name: Build chakram (darwin/amd64)
+        run: go build -o chakram_bin ./cmd/chakram/
+        env:
+          CGO_ENABLED: '1'
+          GOOS: darwin
+          GOARCH: amd64
+
+      - name: Build geth (darwin/amd64)
+        run: |
+          curl -fsSL -o /tmp/geth.tar.gz \
+            "https://github.com/ethereum/go-ethereum/archive/refs/tags/${{ env.GETH_VERSION }}.tar.gz"
+          tar -xzf /tmp/geth.tar.gz -C /tmp
+          cd /tmp/go-ethereum-${GETH_VERSION#v}
+          go build -o /tmp/geth_bin ./cmd/geth
+
+      - name: Build Wails app
+        working-directory: apps/miner
+        run: ~/go/bin/wails build -platform darwin/amd64 -clean
+
+      - name: Bundle binaries into .app
+        run: |
+          BUNDLE="apps/miner/build/bin/ChakramMiner.app/Contents/MacOS"
+          cp chakram_bin  "$BUNDLE/chakram"
+          cp /tmp/geth_bin "$BUNDLE/geth"
+          chmod +x "$BUNDLE/chakram" "$BUNDLE/geth"
+          codesign --force --deep --sign - "apps/miner/build/bin/ChakramMiner.app"
+
+      - name: Create DMG
+        working-directory: apps/miner/build/bin
+        run: |
+          brew install create-dmg
+          create-dmg \
+            --volname "Chakram Miner" \
+            --window-size 540 380 \
+            --icon-size 80 \
+            --icon "ChakramMiner.app" 130 190 \
+            --app-drop-link 410 190 \
+            "ChakramMiner-macOS-x64.dmg" \
+            "ChakramMiner.app"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: miner-macos-x64
+          path: apps/miner/build/bin/ChakramMiner-macOS-x64.dmg
+
+# ── Linux x64 ────────────────────────────────────────────────────────────────
+  build-linux:
+    name: Linux x64
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/setup-go@0aaccfd150d50ccaeb0b1c59f4d4ab7826e8cf37
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: apps/miner/go.sum
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev libwebkit2gtk-4.0-dev dpkg-dev build-essential
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.9.2
+
+      - name: Build chakram (linux/amd64)
+        run: go build -o chakram_bin ./cmd/chakram/
+        env:
+          CGO_ENABLED: '1'
+          GOOS: linux
+          GOARCH: amd64
+
+      - name: Build geth (linux/amd64)
+        run: |
+          curl -fsSL -o /tmp/geth.tar.gz \
+            "https://github.com/ethereum/go-ethereum/archive/refs/tags/${{ env.GETH_VERSION }}.tar.gz"
+          tar -xzf /tmp/geth.tar.gz -C /tmp
+          cd /tmp/go-ethereum-${GETH_VERSION#v}
+          go build -o /tmp/geth_bin ./cmd/geth
+
+      - name: Build Wails app
+        working-directory: apps/miner
+        run: ~/go/bin/wails build -platform linux/amd64 -clean
+
+      - name: Bundle binaries and build .deb
+        working-directory: apps/miner/build/bin
+        run: |
+          cp ${{ github.workspace }}/chakram_bin chakram
+          cp /tmp/geth_bin geth
+          chmod +x chakram geth
+
+          # .deb package
+          mkdir -p deb/DEBIAN \
+                   deb/usr/lib/chakram-miner \
+                   deb/usr/bin \
+                   deb/usr/share/applications
+          cp ChakramMiner chakram geth deb/usr/lib/chakram-miner/
+          ln -s /usr/lib/chakram-miner/ChakramMiner deb/usr/bin/ChakramMiner
+          cat > deb/DEBIAN/control <<EOF
+          Package: chakram-miner
+          Version: 2.0.0
+          Architecture: amd64
+          Maintainer: Chakram Labs <contact@chakram.one>
+          Description: Chakram 2.0 desktop miner
+           Self-contained desktop mining app — geth and chakram bundled.
+          EOF
+          cat > deb/usr/share/applications/chakram-miner.desktop <<EOF
+          [Desktop Entry]
+          Name=Chakram Miner
+          Exec=/usr/bin/ChakramMiner
+          Type=Application
+          Categories=Utility;
+          EOF
+          dpkg-deb --build deb ChakramMiner-linux-x64.deb
+
+          # Plain binary bundle (all three files in one tar)
+          tar -czf ChakramMiner-linux-x64.tar.gz ChakramMiner chakram geth
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: miner-linux
+          path: |
+            apps/miner/build/bin/ChakramMiner-linux-x64.deb
+            apps/miner/build/bin/ChakramMiner-linux-x64.tar.gz
+
+# ── Windows x64 ──────────────────────────────────────────────────────────────
+  build-windows:
+    name: Windows x64
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/setup-go@0aaccfd150d50ccaeb0b1c59f4d4ab7826e8cf37
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: apps/miner/go.sum
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+
+      - name: Install NSIS and Wails
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.9.2
+
+      - name: Build chakram (windows/amd64)
+        shell: pwsh
+        run: go build -o chakram_bin.exe ./cmd/chakram/
+        env:
+          CGO_ENABLED: '1'
+          GOOS: windows
+          GOARCH: amd64
+
+      - name: Build geth (windows/amd64)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/ethereum/go-ethereum/archive/refs/tags/${{ env.GETH_VERSION }}.zip"
+          Invoke-WebRequest $url -OutFile C:\geth_src.zip
+          Expand-Archive C:\geth_src.zip -DestinationPath C:\
+          cd "C:\go-ethereum-$("${{ env.GETH_VERSION }}".TrimStart('v'))"
+          go build -o C:\geth_bin.exe ./cmd/geth
+
+      - name: Build Wails app
+        working-directory: apps/miner
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:USERPROFILE\go\bin;$env:PATH"
+          wails build -platform windows/amd64 -clean
+
+      - name: Bundle binaries
+        shell: pwsh
+        run: |
+          $bin = "apps\miner\build\bin"
+          Copy-Item chakram_bin.exe "$bin\chakram.exe"
+          Copy-Item C:\geth_bin.exe "$bin\geth.exe"
+
+      - name: Build NSIS installer
+        shell: pwsh
+        working-directory: apps/miner/build
+        run: |
+          makensis `
+            "-DARG_WAILS_AMD64_BINARY=..\..\bin\ChakramMiner.exe" `
+            windows\installer\project.nsi
+          Copy-Item bin\ChakramMiner-amd64-installer.exe bin\ChakramMiner-Setup-x64.exe
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: miner-windows
+          path: |
+            apps/miner/build/bin/ChakramMiner.exe
+            apps/miner/build/bin/chakram.exe
+            apps/miner/build/bin/geth.exe
+            apps/miner/build/bin/ChakramMiner-Setup-x64.exe
+
+# ── Release ───────────────────────────────────────────────────────────────────
+  release:
+    name: Create Release
+    needs: [build-macos-arm64, build-macos-x64, build-linux, build-windows]
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/download-artifact@fa0a91b85d4f404e444306234a1c3ca299ad2946
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        working-directory: artifacts
+        run: sha256sum * > SHA256SUMS && cat SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.event.inputs.version }}" \
+            --title "Chakram Miner ${{ github.event.inputs.version }}" \
+            --notes "## Chakram Miner ${{ github.event.inputs.version }}
+
+          Self-contained desktop mining app — no separate installs needed.
+          Bundles geth ${{ env.GETH_VERSION }} and chakram.
+
+          | Platform | Download |
+          |---|---|
+          | macOS Apple Silicon | ChakramMiner-macOS-arm64.dmg |
+          | macOS Intel | ChakramMiner-macOS-x64.dmg |
+          | Linux | ChakramMiner-linux-x64.deb or .tar.gz |
+          | Windows | ChakramMiner-Setup-x64.exe |" \
+            artifacts/*

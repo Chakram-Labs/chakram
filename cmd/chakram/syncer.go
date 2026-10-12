@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 
 	"chakram/consensus"
 )
@@ -45,8 +46,9 @@ type Syncer struct {
 	accept AcceptFunc
 	relay  RelayFunc
 
-	mu      sync.Mutex
-	orphans map[[32]byte]*consensus.ConsensusBlock // parentHash → block
+	mu        sync.Mutex
+	orphans   map[[32]byte]*consensus.ConsensusBlock // parentHash → block
+	ibdActive int32                                  // atomic: 1 while SyncFrom is running
 }
 
 // NewSyncer creates a Syncer. relay may be nil (no gossip relay).
@@ -150,7 +152,7 @@ func (s *Syncer) applyBlock(ctx context.Context, b *consensus.ConsensusBlock) er
 		return fmt.Errorf("syncer: set tip: %w", err)
 	}
 	log.Printf("[syncer] applied block height=%d hash=%s", b.Header.Height, consensus.HashToHex(b.Hash)[:10])
-	if s.relay != nil {
+	if s.relay != nil && atomic.LoadInt32(&s.ibdActive) == 0 {
 		s.relay(b)
 	}
 	return nil
@@ -238,10 +240,13 @@ func (s *Syncer) drainOrphans(ctx context.Context, parentHash [32]byte, parentHe
 // each through Receive. fromHeight must be low enough to include the common
 // ancestor's child when syncing across a fork; callers on the same chain can pass
 // localTip+1. Blocks already in the store are skipped by Receive's duplicate check.
+// Relay is suppressed during IBD to avoid bouncing blocks back to the source peer.
 func (s *Syncer) SyncFrom(ctx context.Context, fromHeight, targetHeight uint64, fetch FetchFunc) error {
 	if fromHeight > targetHeight {
 		return nil
 	}
+	atomic.StoreInt32(&s.ibdActive, 1)
+	defer atomic.StoreInt32(&s.ibdActive, 0)
 
 	const batchSize = 100
 	for from := fromHeight; from <= targetHeight; {

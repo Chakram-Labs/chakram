@@ -87,6 +87,15 @@ func (c *Client) FetchBlocks(ctx context.Context, from, limit uint64) ([]*consen
 	return blocks, nil
 }
 
+// FetchPeers returns the peer's known peer URL list (GET /peers).
+func (c *Client) FetchPeers(ctx context.Context) ([]string, error) {
+	var resp PeersResponse
+	if err := c.get(ctx, "/peers", &resp); err != nil {
+		return nil, fmt.Errorf("fetch peers from %s: %w", c.base, err)
+	}
+	return resp.Peers, nil
+}
+
 // FindCommonAncestor sends a block locator to the peer and returns the locator
 // response containing the common ancestor height.
 func (c *Client) FindCommonAncestor(ctx context.Context, req LocatorRequest) (LocatorResponse, error) {

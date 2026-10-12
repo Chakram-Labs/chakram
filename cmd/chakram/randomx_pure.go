@@ -26,15 +26,22 @@ type randomXEngine struct {
 	cache   *randomx.Randomx_Cache
 	vm      *randomx.VM
 	lastKey []byte
+	label   string // unused in pure-Go (no logs), present for API parity with CGo
 }
 
-func newRandomXEngine(lightMode bool) consensus.PoWEngine {
-	return &randomXEngine{}
+// newRandomXEngine returns a single-threaded pure-Go engine.
+// label is accepted for API parity with the CGo build but is not used.
+func newRandomXEngine(_ bool, label ...string) consensus.PoWEngine {
+	lbl := ""
+	if len(label) > 0 {
+		lbl = label[0]
+	}
+	return &randomXEngine{label: lbl}
 }
 
 // newMiningEngine is a single-threaded fallback on platforms without CGo.
-func newMiningEngine(lightMode bool, _ int) consensus.PoWEngine {
-	return &randomXEngine{}
+func newMiningEngine(_ bool, _ int) consensus.PoWEngine {
+	return &randomXEngine{label: "mining"}
 }
 
 func (e *randomXEngine) Init(key []byte) error {

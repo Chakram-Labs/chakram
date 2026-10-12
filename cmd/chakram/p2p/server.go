@@ -12,6 +12,12 @@ import (
 	"chakram/consensus"
 )
 
+// MinedBlocksResponse is returned by GET /minedblocks.
+type MinedBlocksResponse struct {
+	Count  uint64 `json:"count"`
+	Latest uint64 `json:"latest"` // highest block height mined by this address (0 if none)
+}
+
 const (
 	maxSyncBatch   = 500
 	maxBodyBytes   = 2 << 20 // 2 MB per POST /block body
@@ -59,6 +65,12 @@ func WithGenesisHash(h string) ServerOption {
 	return func(s *Server) { s.genesisHash = h }
 }
 
+// WithPeerManager attaches a PeerManager so GET /peers returns the node's
+// known peer list, enabling peer exchange across the network.
+func WithPeerManager(pm *PeerManager) ServerOption {
+	return func(s *Server) { s.peerManager = pm }
+}
+
 // ipState tracks per-IP rate-limit and ban state.
 type ipState struct {
 	reqCount    int
@@ -67,6 +79,17 @@ type ipState struct {
 	bannedUntil time.Time
 }
 
+// minedCache caches the result of a /minedblocks scan to avoid re-scanning
+// from genesis on every request. Invalidated after cacheTTL.
+type minedCache struct {
+	count   uint64
+	latest  uint64
+	scanned uint64
+	builtAt time.Time
+}
+
+const minedCacheTTL = 60 * time.Second
+
 // Server is the HTTP server that exposes consensus blocks to peers.
 type Server struct {
 	store       BlockStore
@@ -74,17 +97,22 @@ type Server struct {
 	pow         PoWValidator
 	chainID     uint64
 	genesisHash string // 0x-prefixed lowercase hex
+	peerManager *PeerManager
 	mux         *http.ServeMux
 
 	mu    sync.Mutex
 	peers map[string]*ipState
+
+	minedMu    sync.Mutex
+	minedCaches map[[20]byte]*minedCache
 }
 
 // NewServer creates a Server backed by store. Options are applied in order.
 func NewServer(store BlockStore, opts ...ServerOption) *Server {
 	s := &Server{
-		store: store,
-		peers: make(map[string]*ipState),
+		store:       store,
+		peers:       make(map[string]*ipState),
+		minedCaches: make(map[[20]byte]*minedCache),
 	}
 	for _, o := range opts {
 		o(s)
@@ -94,6 +122,8 @@ func NewServer(store BlockStore, opts ...ServerOption) *Server {
 	s.mux.HandleFunc("/block", s.handleBlock)
 	s.mux.HandleFunc("/blocks", s.handleBlocks)
 	s.mux.HandleFunc("/locator", s.handleLocator)
+	s.mux.HandleFunc("/peers", s.handlePeers)
+	s.mux.HandleFunc("/minedblocks", s.handleMinedBlocks)
 	return s
 }
 
@@ -359,6 +389,82 @@ func (s *Server) handleLocator(w http.ResponseWriter, r *http.Request) {
 	}
 	// No entry matched — report genesis as the fallback common point.
 	jsonOK(w, LocatorResponse{CommonHeight: 0})
+}
+
+// handleMinedBlocks counts blocks whose MinerAddress matches the ?miner= query param.
+// Results are cached for minedCacheTTL and updated incrementally from the last
+// scanned height, so repeated calls on a live chain are O(new blocks only).
+func (s *Server) handleMinedBlocks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	minerHex := r.URL.Query().Get("miner")
+	if minerHex == "" {
+		http.Error(w, "missing miner param", http.StatusBadRequest)
+		return
+	}
+	addr, err := consensus.AddrFromHex(minerHex)
+	if err != nil {
+		http.Error(w, "invalid miner address: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	_, tipHeight, err := s.store.GetTip()
+	if err != nil {
+		http.Error(w, "no tip", http.StatusServiceUnavailable)
+		return
+	}
+
+	s.minedMu.Lock()
+	cache := s.minedCaches[addr]
+	now := time.Now()
+	// Invalidate the cache if it's stale OR if the chain has grown since last scan.
+	if cache != nil && now.Sub(cache.builtAt) > minedCacheTTL {
+		cache = nil
+	}
+	if cache == nil {
+		cache = &minedCache{}
+		s.minedCaches[addr] = cache
+	}
+	// Scan only new blocks since the last scan.
+	from := cache.scanned + 1
+	if cache.scanned == 0 {
+		from = 1
+	}
+	for h := from; h <= tipHeight; h++ {
+		b, err := s.store.GetBlockByHeight(h)
+		if err != nil {
+			break
+		}
+		if b.Header.MinerAddress == addr {
+			cache.count++
+			cache.latest = h
+		}
+	}
+	cache.scanned = tipHeight
+	cache.builtAt = now
+	result := MinedBlocksResponse{Count: cache.count, Latest: cache.latest}
+	s.minedMu.Unlock()
+
+	jsonOK(w, result)
+}
+
+// handlePeers returns the node's known peer URL list so other nodes can
+// discover peers without hardcoded seed addresses.
+func (s *Server) handlePeers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var peers []string
+	if s.peerManager != nil {
+		peers = s.peerManager.URLs()
+	}
+	if peers == nil {
+		peers = []string{}
+	}
+	jsonOK(w, PeersResponse{Peers: peers})
 }
 
 func jsonOK(w http.ResponseWriter, v any) {

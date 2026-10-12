@@ -130,7 +130,30 @@ func (m *Miner) mineOne(ctx context.Context) error {
 	// ── 5. mine with periodic payload refresh ────────────────────────────────
 	resultCh := make(chan mineResult, 1)
 	quitMine := make(chan struct{})
-	go m.hashLoop(&header, resultCh, quitMine)
+
+	// hashCount is shared across all hashLoop restarts for this height so the
+	// 30-second report interval isn't reset on every 3-second payload refresh.
+	var hashCount int64
+	reportCtx, reportCancel := context.WithCancel(ctx)
+	defer reportCancel()
+	go func() {
+		ticker := time.NewTicker(hashrateReportInterval)
+		defer ticker.Stop()
+		last := time.Now()
+		for {
+			select {
+			case <-reportCtx.Done():
+				return
+			case <-ticker.C:
+				n := atomic.SwapInt64(&hashCount, 0)
+				hps := float64(n) / time.Since(last).Seconds()
+				last = time.Now()
+				log.Printf("[miner] height=%d hashrate=%.0f H/s", height, hps)
+			}
+		}
+	}()
+
+	go m.hashLoop(&header, resultCh, quitMine, &hashCount)
 
 	refreshTicker := time.NewTicker(payloadRefreshInterval)
 	defer refreshTicker.Stop()
@@ -139,6 +162,7 @@ func (m *Miner) mineOne(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			close(quitMine)
+			<-resultCh // wait for hash goroutines to exit before pow.Close() destroys VMs
 			return ctx.Err()
 
 		case result := <-resultCh:
@@ -180,7 +204,7 @@ func (m *Miner) mineOne(ctx context.Context) error {
 
 			quitMine = make(chan struct{})
 			resultCh = make(chan mineResult, 1)
-			go m.hashLoop(&header, resultCh, quitMine)
+			go m.hashLoop(&header, resultCh, quitMine, &hashCount)
 			log.Printf("[miner] refreshed payload at height=%d execHash=%s...", height, consensus.HashToHex(execHash)[:10])
 		}
 	}
@@ -285,19 +309,18 @@ type multiThreadPoW interface {
 
 // hashLoop runs RandomX hashing until a valid nonce is found or quit is closed.
 // Uses parallel goroutines when the PoW engine exposes multiThreadPoW.
-func (m *Miner) hashLoop(hdr *consensus.ConsensusBlockHeader, result chan<- mineResult, quit <-chan struct{}) {
+// hashCount is atomically incremented for each hash computed; the caller owns the counter.
+func (m *Miner) hashLoop(hdr *consensus.ConsensusBlockHeader, result chan<- mineResult, quit <-chan struct{}, hashCount *int64) {
 	if mt, ok := m.pow.(multiThreadPoW); ok && mt.NumMiningThreads() >= 2 {
-		hashLoopMulti(hdr, result, quit, mt)
+		hashLoopMulti(hdr, result, quit, mt, hashCount)
 		return
 	}
-	hashLoopSingle(hdr, result, quit, m.pow)
+	hashLoopSingle(hdr, result, quit, m.pow, hashCount)
 }
 
 // hashLoopSingle is the original single-threaded mining loop.
-func hashLoopSingle(hdr *consensus.ConsensusBlockHeader, result chan<- mineResult, quit <-chan struct{}, pow consensus.PoWEngine) {
+func hashLoopSingle(hdr *consensus.ConsensusBlockHeader, result chan<- mineResult, quit <-chan struct{}, pow consensus.PoWEngine, hashCount *int64) {
 	startNonce := hdr.Nonce
-	var count uint64
-	lastReport := time.Now()
 	h := *hdr
 
 	for {
@@ -313,15 +336,8 @@ func hashLoopSingle(hdr *consensus.ConsensusBlockHeader, result chan<- mineResul
 
 		serialized := h.Serialize()
 		hashBytes := pow.Hash(serialized[:])
-		count++
+		atomic.AddInt64(hashCount, 1)
 		runtime.Gosched()
-
-		if time.Since(lastReport) >= hashrateReportInterval {
-			hps := float64(count) / time.Since(lastReport).Seconds()
-			log.Printf("[miner] height=%d nonce=%d hashrate=%.0f H/s", h.Height, h.Nonce, hps)
-			count = 0
-			lastReport = time.Now()
-		}
 
 		var hash [32]byte
 		copy(hash[:], hashBytes)
@@ -349,7 +365,7 @@ func hashLoopSingle(hdr *consensus.ConsensusBlockHeader, result chan<- mineResul
 // returned before the caller unblocks. This guarantees that when mineOne
 // receives the result and calls Init() for the next epoch, no goroutine is
 // still executing HashOnThread on the shared dataset.
-func hashLoopMulti(hdr *consensus.ConsensusBlockHeader, result chan<- mineResult, quit <-chan struct{}, mt multiThreadPoW) {
+func hashLoopMulti(hdr *consensus.ConsensusBlockHeader, result chan<- mineResult, quit <-chan struct{}, mt multiThreadPoW, hashCount *int64) {
 	n := mt.NumMiningThreads()
 	startNonce := hdr.Nonce
 
@@ -358,10 +374,8 @@ func hashLoopMulti(hdr *consensus.ConsensusBlockHeader, result chan<- mineResult
 	closeStop := func() { stopOnce.Do(func() { close(stop) }) }
 
 	var (
-		totalHashes int64
-		lastReport  = time.Now()
-		winner      mineResult // zero value = no winner found
-		winOnce     sync.Once
+		winner  mineResult // zero value = no winner found
+		winOnce sync.Once
 	)
 
 	var wg sync.WaitGroup
@@ -384,18 +398,8 @@ func hashLoopMulti(hdr *consensus.ConsensusBlockHeader, result chan<- mineResult
 
 				serialized := h.Serialize()
 				hashBytes := mt.HashOnThread(tidx, serialized[:])
-				atomic.AddInt64(&totalHashes, 1)
+				atomic.AddInt64(hashCount, 1)
 				runtime.Gosched()
-
-				// Goroutine 0 owns the hashrate log.
-				if tidx == 0 && time.Since(lastReport) >= hashrateReportInterval {
-					n64 := atomic.SwapInt64(&totalHashes, 0)
-					elapsed := time.Since(lastReport)
-					hps := float64(n64) / elapsed.Seconds()
-					log.Printf("[miner] height=%d nonce=%d hashrate=%.0f H/s (%d threads)",
-						h.Height, h.Nonce, hps, n)
-					lastReport = time.Now()
-				}
 
 				var hash [32]byte
 				copy(hash[:], hashBytes)

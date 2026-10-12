@@ -18,14 +18,38 @@ import (
 	"errors"
 	"log"
 	"runtime"
+	"strings"
 	"sync"
 	"unsafe"
 
 	"chakram/consensus"
 )
 
-// randomXImplementation returns a human-readable name for the active engine.
-func randomXImplementation() string { return "CGo (HARD_AES|JIT|SECURE)" }
+// randomXImplementation returns the active CGo engine with the flags that
+// randomx_get_flags() detects at runtime on this CPU.
+func randomXImplementation() string {
+	flags := C.randomx_get_flags()
+	var parts []string
+	if flags&C.RANDOMX_FLAG_HARD_AES != 0 {
+		parts = append(parts, "HARD_AES")
+	}
+	if flags&C.RANDOMX_FLAG_JIT != 0 {
+		parts = append(parts, "JIT")
+	}
+	if flags&C.RANDOMX_FLAG_SECURE != 0 {
+		parts = append(parts, "SECURE")
+	}
+	if flags&C.RANDOMX_FLAG_ARGON2_AVX2 != 0 {
+		parts = append(parts, "AVX2")
+	}
+	if flags&C.RANDOMX_FLAG_ARGON2_SSSE3 != 0 {
+		parts = append(parts, "SSSE3")
+	}
+	if len(parts) == 0 {
+		parts = []string{"DEFAULT"}
+	}
+	return "CGo (" + strings.Join(parts, "|") + ")"
+}
 
 // randomXIsCgo reports whether the production CGo engine is compiled in.
 // Returns false for the pure-Go fallback, which is ~1 H/s and unsuitable
@@ -45,23 +69,35 @@ type randomXEngine struct {
 	dataset    *C.randomx_dataset
 	lastKey    []byte
 	lightMode  bool
+	label      string // optional log prefix, e.g. "mining" or "verify"
 }
 
 // newRandomXEngine returns a single-threaded engine (verification / tests).
-func newRandomXEngine(lightMode bool) consensus.PoWEngine {
-	return &randomXEngine{lightMode: lightMode}
+// label is an optional name shown in log messages to distinguish engine instances.
+func newRandomXEngine(lightMode bool, label ...string) consensus.PoWEngine {
+	lbl := ""
+	if len(label) > 0 {
+		lbl = label[0]
+	}
+	return &randomXEngine{lightMode: lightMode, label: lbl}
 }
 
 // newMiningEngine returns a multi-threaded mining engine.
-// numThreads mining VMs are created (each shares one dataset); the main VM is
-// kept separately for concurrent PoW verification via Hash().
-// Falls back to single-threaded when lightMode is true or numThreads < 2.
+//
+// Full mode (lightMode=false): numThreads VMs all share one 2 GB dataset;
+// the main VM is kept separately for Hash(). Falls back to single-threaded
+// when numThreads < 2 or dataset allocation fails.
+//
+// Light mode (lightMode=true): numThreads VMs each back a single 256 MB cache
+// (read-only after Init, so sharing is safe). This is valid per the RandomX
+// specification: "multiple VMs can share the same randomx_cache."
+// Without this, --threads N is silently ignored in light mode.
 func newMiningEngine(lightMode bool, numThreads int) consensus.PoWEngine {
 	n := 0
-	if !lightMode && numThreads >= 2 {
+	if numThreads >= 2 {
 		n = numThreads
 	}
-	return &randomXEngine{lightMode: lightMode, numWantVMs: n}
+	return &randomXEngine{lightMode: lightMode, numWantVMs: n, label: "mining"}
 }
 
 // NumMiningThreads returns the number of available parallel mining VMs.
@@ -165,9 +201,9 @@ func (e *randomXEngine) Init(key []byte) error {
 						}
 						newMiningVMs = append(newMiningVMs, mvm)
 					}
-					log.Printf("[RandomX] full mode: %d mining thread(s)", len(newMiningVMs))
+					log.Printf("[RandomX][%s] full mode: %d mining thread(s)", e.label, len(newMiningVMs))
 				} else {
-					log.Printf("[RandomX] full mode active")
+					log.Printf("[RandomX][%s] full mode active", e.label)
 				}
 
 				e.vm = newVM
@@ -183,11 +219,25 @@ func (e *randomXEngine) Init(key []byte) error {
 		// fall through to light mode
 	}
 
-	// LIGHT MODE PATH: cache-backed VM, no dataset.
+	// LIGHT MODE PATH: cache-backed VMs, no dataset.
+	// Multiple VMs may share the same randomx_cache; after randomx_init_cache
+	// the cache is read-only, so concurrent VM usage across goroutines is safe.
 	lightVM := C.randomx_create_vm(flags, newCache, nil)
 	if lightVM == nil {
 		C.randomx_release_cache(newCache)
 		return errors.New("randomx: failed to create VM")
+	}
+
+	// One extra VM per desired mining thread (each goroutine owns its slot).
+	var lightMiningVMs []*C.randomx_vm
+	if e.numWantVMs >= 2 {
+		for i := 0; i < e.numWantVMs; i++ {
+			mvm := C.randomx_create_vm(flags, newCache, nil)
+			if mvm == nil {
+				break
+			}
+			lightMiningVMs = append(lightMiningVMs, mvm)
+		}
 	}
 
 	// Tear down old resources (light-mode re-key or fallback from failed full-mode).
@@ -197,7 +247,6 @@ func (e *randomXEngine) Init(key []byte) error {
 	for _, mvm := range e.miningVMs {
 		C.randomx_destroy_vm(mvm)
 	}
-	e.miningVMs = nil
 	if e.dataset != nil {
 		C.randomx_release_dataset(e.dataset)
 		e.dataset = nil
@@ -207,14 +256,19 @@ func (e *randomXEngine) Init(key []byte) error {
 	}
 
 	e.vm = lightVM
+	e.miningVMs = lightMiningVMs
 	e.cache = newCache
 	e.lastKey = make([]byte, len(key))
 	copy(e.lastKey, key)
 
 	if e.lightMode {
-		log.Printf("[RandomX] light mode")
+		if len(lightMiningVMs) >= 2 {
+			log.Printf("[RandomX][%s] light mode: %d mining thread(s)", e.label, len(lightMiningVMs))
+		} else {
+			log.Printf("[RandomX][%s] light mode", e.label)
+		}
 	} else {
-		log.Printf("[RandomX] light mode (full mode unavailable)")
+		log.Printf("[RandomX][%s] light mode (full mode unavailable)", e.label)
 	}
 	return nil
 }

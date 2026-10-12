@@ -150,19 +150,26 @@ const DevnetInitialCompactTarget uint64 = 0x2001000000000000
 const DevnetCP5CompactTarget uint64 = 0x1f40000000000000
 
 // TestnetInitialCompactTarget is the starting compact target for the public
-// testnet (chain ID 11640). Decodes to 2^244 (~4,096 expected hashes per block).
+// testnet (chain ID 11640).
 //
 // Calibration (Apple M1 Pro 8-core, full-mode RandomX, 7 threads, 60 s measured):
 //   per-thread hashrate  : 153.8 H/s
 //   7-thread total       : 1,076 H/s (memory-bandwidth limited; 7 = NumCPU-1)
 //   assumed miners at launch: 3 similar M1 nodes = 3 × 1,076 = 3,228 H/s
-//   solve time at 3 miners (4,096 hashes): 4,096 / 3,228 ≈ 1.27 s  << 15 s
-//   solve time at 1 miner  (4,096 hashes): 4,096 / 1,076 ≈ 3.8 s   << 15 s
-//   → bootstrap gap rule (height ≤ DifficultyWindow) is always binding at 15 s ✓
-//   After bootstrap: LWMA-3 adjusts toward 15 s within one 90-block window.
+//   desired block time   : 15 s
+//   expected hashes      : 3,228 × 15 = 48,420
 //
-// This constant is baked into the testnet genesis; do not change it.
-const TestnetInitialCompactTarget uint64 = 0x1F10000000000000
+// Encoding:
+//   byteLen  = 31  (target occupies 31 bytes, i.e. < 2^248)
+//   mantissa = ⌊2^64 / 48,420⌋ → rounded to 0x015A000000000000 = 380,431,023,210,496
+//   compact  = (0x1F << 56) | 0x015A000000000000  = 0x1F015A0000000000
+//   actual expected hashes = 2^64 / 380,431,023,210,496 ≈ 48,489
+//   actual block time      = 48,489 / 3,228 ≈ 15.02 s ✓
+//
+// After bootstrap (height > DifficultyWindow): LWMA-3 adjusts toward 15 s.
+//
+// Changing this constant changes the consensus genesis block hash → testnet must be reset.
+const TestnetInitialCompactTarget uint64 = 0x1F015A0000000000
 
 // TestnetFaucetAddr is the well-known testnet faucet address.
 // All testnet CHK originates here; this address must never appear in the
