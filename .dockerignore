@@ -1,0 +1,32 @@
+# ── Secrets — must NEVER reach an image layer ────────────────────────────────
+docker/.env
+docker/secrets/
+
+# ── Web: handled by the node:22-alpine build stage ───────────────────────────
+web/node_modules/
+web/dist/
+
+# ── Go test / build artefacts ────────────────────────────────────────────────
+*.test
+*.out
+vendor/
+chakram
+chakramctl
+genesis-tool
+
+# ── Version control ───────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── IDE / OS noise ───────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# ── Docs, scripts, contracts — not needed inside the image ───────────────────
+docs/
+scripts/
+contracts/
+monitoring/
+*.md

@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chakram — High-Performance EVM Blockchain</title>
+  <meta name="description" content="Chakram is a high-performance EVM-compatible blockchain combining CometBFT consensus with go-ethereum execution for fast, deterministic finality.">
+  <meta name="theme-color" content="#070707">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Chakram — High-Performance EVM Blockchain">
+  <meta property="og:description" content="Sub-second finality. EVM-native. Permissionless validator set. Built on CometBFT + go-ethereum.">
+  <meta property="og:image" content="https://chakram.one/assets/og.png">
+  <meta property="og:url" content="https://chakram.one">
+
+  <!-- Favicon -->
+  <link rel="icon" href="assets/chk-logo.png" type="image/png">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     NAVIGATION
+══════════════════════════════════════ -->
+<nav id="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-brand">
+      <img src="assets/chk-logo.png" alt="CHK">
+      <span>Chakram</span>
+    </a>
+
+    <ul class="nav-links">
+      <li><a href="#about">About</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#validator">Validators</a></li>
+      <li><a href="#tokenomics">Tokenomics</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+    </ul>
+
+    <div class="nav-cta">
+      <a href="https://node.chakram.one" target="_blank" rel="noopener" class="btn btn-outline">Explorer</a>
+      <a href="#validator" class="btn btn-primary">Run a Node</a>
+    </div>
+
+    <button class="nav-mobile-toggle" id="mobile-toggle" aria-label="Menu">☰</button>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════
+     HERO
+══════════════════════════════════════ -->
+<section id="hero">
+  <div class="hero-content">
+    <div class="hero-badge">
+      <span class="chip chip-lime chip-dot">Mainnet Live</span>
+    </div>
+
+    <h1 class="t-display hero-title">
+      The Chain Built for<br>
+      <span class="accent">Speed &amp; Finality</span>
+    </h1>
+
+    <p class="hero-subtitle">
+      Chakram combines CometBFT BFT consensus with go-ethereum execution.
+      Sub-second finality, full EVM compatibility, permissionless validators —
+      no waiting, no reorgs.
+    </p>
+
+    <div class="hero-ctas">
+      <a href="#validator" class="btn btn-primary">Become a Validator</a>
+      <a href="https://node.chakram.one" target="_blank" rel="noopener" class="btn btn-outline">View Explorer</a>
+      <button class="btn btn-ghost" id="add-network-btn">+ Add to MetaMask →</button>
+    </div>
+
+    <div class="hero-meta">
+      <div class="hero-meta-item">
+        <span class="hero-meta-value" id="hero-block-height">—</span>
+        <span class="hero-meta-label">Block Height</span>
+      </div>
+      <div class="hero-meta-sep"></div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-value" id="hero-validators">—</span>
+        <span class="hero-meta-label">Validators</span>
+      </div>
+      <div class="hero-meta-sep"></div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-value" id="hero-block-time">~1s</span>
+        <span class="hero-meta-label">Block Time</span>
+      </div>
+      <div class="hero-meta-sep"></div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-value">11640</span>
+        <span class="hero-meta-label">Chain ID</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     LIVE STATS BAR
+══════════════════════════════════════ -->
+<section id="stats-bar">
+  <div class="stats-bar-inner">
+    <div class="stat-item">
+      <div>
+        <div class="stat-num lime" id="stat-block">—</div>
+        <div class="stat-label">Latest Block</div>
+      </div>
+    </div>
+    <div class="stat-item">
+      <div>
+        <div class="stat-num" id="stat-validators">—</div>
+        <div class="stat-label">Active Validators</div>
+      </div>
+    </div>
+    <div class="stat-item">
+      <div>
+        <div class="stat-num" id="stat-txs">—</div>
+        <div class="stat-label">Total Txns</div>
+      </div>
+    </div>
+    <div class="stat-item">
+      <div>
+        <div class="stat-num">11640</div>
+        <div class="stat-label">Chain ID</div>
+      </div>
+    </div>
+    <div class="stat-item">
+      <div>
+        <div class="stat-num">CHK</div>
+        <div class="stat-label">Native Token</div>
+      </div>
+    </div>
+    <div class="stat-item">
+      <div>
+        <div class="stat-num" id="stat-status">●</div>
+        <div class="stat-label">Network Status</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     ABOUT
+══════════════════════════════════════ -->
+<section id="about" class="section-pad">
+  <div class="container">
+    <div class="about-grid">
+      <div class="about-text reveal">
+        <div class="section-label">
+          <span class="t-overline">What is Chakram</span>
+        </div>
+        <h2 class="t-headline" style="margin-bottom:1.25rem;">A New Kind of<br>EVM Blockchain</h2>
+        <p class="t-body-lg">
+          Chakram is a permissionless Layer 1 blockchain that separates consensus
+          from execution. CometBFT handles validator coordination and instant
+          BFT finality; go-ethereum handles smart contracts and EVM execution.
+        </p>
+        <p class="t-body" style="margin-top:1rem;">
+          Once a block is committed by &gt;⅔ of validators, it is final — forever.
+          No probabilistic finality, no long confirmation waits, no chain reorgs.
+          Your transactions are either in or out, within one second.
+        </p>
+        <div style="margin-top:2rem;">
+          <a href="https://github.com/Chakram-Labs/chakram" target="_blank" rel="noopener" class="btn btn-outline">View on GitHub →</a>
+        </div>
+      </div>
+
+      <div class="about-pillars reveal reveal-delay-2">
+        <div class="pillar">
+          <div class="icon-box icon-box-lime">⚡</div>
+          <div class="pillar-body">
+            <h4>Instant Finality</h4>
+            <p>Transactions are finalized in &lt;1 second by CometBFT BFT consensus — no reorgs, no waiting for confirmations.</p>
+          </div>
+        </div>
+        <div class="pillar">
+          <div class="icon-box icon-box-lime">🔗</div>
+          <div class="pillar-body">
+            <h4>Full EVM Compatibility</h4>
+            <p>Deploy any Ethereum smart contract as-is. MetaMask, Hardhat, Foundry, ethers.js — all work without changes.</p>
+          </div>
+        </div>
+        <div class="pillar">
+          <div class="icon-box icon-box-lime">🌐</div>
+          <div class="pillar-body">
+            <h4>Permissionless Validators</h4>
+            <p>Anyone can stake CHK and join the validator set. No gatekeeping, no whitelists — pure on-chain governance.</p>
+          </div>
+        </div>
+        <div class="pillar">
+          <div class="icon-box icon-box-lime">🔒</div>
+          <div class="pillar-body">
+            <h4>On-Chain Staking Registry</h4>
+            <p>Validator registration, delegation, rewards, and slashing are governed by a transparent smart contract — no off-chain trust.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     ARCHITECTURE
+══════════════════════════════════════ -->
+<section id="architecture" class="section-pad">
+  <div class="container">
+    <div class="reveal" style="text-align:center;margin-bottom:var(--space-4);">
+      <div style="display:inline-flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4);">
+        <span class="t-overline">Architecture</span>
+      </div>
+      <h2 class="t-headline">How Chakram Works</h2>
+      <p class="t-body" style="max-width:580px;margin:1rem auto 0;">
+        A clean separation between consensus and execution gives Chakram both the security of BFT finality and the flexibility of a full EVM.
+      </p>
+    </div>
+
+    <div class="arch-diagram reveal">
+      <div class="arch-block">
+        <div class="arch-block-name">Validators</div>
+        <div class="arch-block-sub">CometBFT nodes</div>
+      </div>
+      <div class="arch-arrow">
+        <div class="arch-arrow-line"></div>
+        <div class="arch-arrow-label">P2P / Vote</div>
+      </div>
+      <div class="arch-block lime-block">
+        <div class="arch-block-name">CometBFT</div>
+        <div class="arch-block-sub">Consensus layer</div>
+      </div>
+      <div class="arch-arrow">
+        <div class="arch-arrow-line"></div>
+        <div class="arch-arrow-label">Engine API</div>
+      </div>
+      <div class="arch-block lime-block">
+        <div class="arch-block-name">go-ethereum</div>
+        <div class="arch-block-sub">Execution layer</div>
+      </div>
+      <div class="arch-arrow">
+        <div class="arch-arrow-line"></div>
+        <div class="arch-arrow-label">eth_call / JSON-RPC</div>
+      </div>
+      <div class="arch-block">
+        <div class="arch-block-name">Clients</div>
+        <div class="arch-block-sub">MetaMask / dApps</div>
+      </div>
+    </div>
+
+    <div class="arch-cards reveal">
+      <div class="arch-card">
+        <div class="arch-card-title">Consensus</div>
+        <p>CometBFT v0.40 runs PBFT-style BFT rounds. &gt;⅔ weighted stake must sign a block before it's committed. One missed round → timeout, next proposer takes over.</p>
+      </div>
+      <div class="arch-card">
+        <div class="arch-card-title">Execution</div>
+        <p>go-ethereum v1.17 processes every EVM transaction identically to Ethereum. The same opcodes, same precompiles, same gas rules — just different consensus underneath.</p>
+      </div>
+      <div class="arch-card">
+        <div class="arch-card-title">Engine API</div>
+        <p>CometBFT talks to geth via the same Engine API that Ethereum's beacon chain uses: <code style="font-size:0.75rem;color:var(--lime);">engine_forkchoiceUpdated</code> + <code style="font-size:0.75rem;color:var(--lime);">engine_newPayload</code>.</p>
+      </div>
+      <div class="arch-card">
+        <div class="arch-card-title">Staking Registry</div>
+        <p>A Solidity smart contract on-chain governs the entire validator lifecycle: registration, delegation, reward distribution, and slashing — fully transparent.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     FEATURES
+══════════════════════════════════════ -->
+<section id="features" class="section-pad">
+  <div class="container">
+    <div class="reveal" style="text-align:center;margin-bottom:var(--space-4);">
+      <div style="display:inline-flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4);">
+        <span class="t-overline">Why Chakram</span>
+      </div>
+      <h2 class="t-headline">Built for Real Apps</h2>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <div class="feature-icon">⚡</div>
+        <h3>Sub-Second Block Times</h3>
+        <p>CometBFT's timeout-driven rounds produce blocks in ~1 second under normal conditions — fast enough for real-time applications.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">🔒</div>
+        <h3>BFT Finality</h3>
+        <p>Once committed, a block cannot be reversed. No waiting for 12 or 32 confirmation blocks. Your users see instant settlement.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">🛠️</div>
+        <h3>EVM Drop-In</h3>
+        <p>Use every Ethereum tool you already know — Hardhat, Foundry, Remix, MetaMask, OpenZeppelin. Zero friction deployment.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">📜</div>
+        <h3>On-Chain Governance</h3>
+        <p>Validator admission, parameter changes, and upgrades are decided by stake-weighted on-chain votes. No foundation veto.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">🌐</div>
+        <h3>Decentralized Validators</h3>
+        <p>Auto-permissionless after launch: stake the minimum, submit a transaction, start validating. No application process.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">📊</div>
+        <h3>Slashing &amp; Accountability</h3>
+        <p>Misbehaving validators lose stake automatically. Double-sign or stay offline too long and the protocol enforces the penalty.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">💎</div>
+        <h3>Delegated Staking</h3>
+        <p>Token holders can delegate CHK to validators and earn a share of block rewards. Liquid delegation with commission control.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">🔑</div>
+        <h3>Validator Metadata</h3>
+        <p>Each validator registers a name, website, description, and commission rate on-chain — discoverable by any delegator.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">🔄</div>
+        <h3>No Reorgs, Ever</h3>
+        <p>PBFT-style BFT consensus means the chain never forks after block finalization. Applications can trust the first confirmation.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     VALIDATOR ONBOARDING
+══════════════════════════════════════ -->
+<section id="validator" class="section-pad">
+  <div class="container">
+
+    <div class="reveal" style="text-align:center;margin-bottom:var(--space-12);">
+      <span class="t-overline">Run a Node</span>
+      <h2 class="t-headline" style="margin-top:var(--space-4);">Become a Validator</h2>
+      <p class="t-body" style="max-width:520px;margin:1rem auto 0;">
+        Anyone can run a Chakram full node and become a validator.
+        Choose the setup that fits your machine.
+      </p>
+    </div>
+
+    <!-- Path selector tabs -->
+    <div class="run-tabs reveal">
+      <button class="run-tab active" data-tab="binary">
+        <span class="run-tab-icon">💻</span>
+        <span class="run-tab-label">Desktop / Laptop</span>
+        <span class="run-tab-sub">Windows · Mac · Linux — no Docker</span>
+      </button>
+      <button class="run-tab" data-tab="docker">
+        <span class="run-tab-icon">🖥️</span>
+        <span class="run-tab-label">Server / VPS</span>
+        <span class="run-tab-sub">Linux · Docker Compose</span>
+      </button>
+    </div>
+
+    <!-- ── Option A: standalone binary ── -->
+    <div class="run-panel active" id="tab-binary">
+      <div class="run-panel-inner">
+
+        <div class="run-steps reveal">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h4>Download <code class="t-mono lime-text">chakram-node</code></h4>
+              <p>Grab the binary for your platform from the GitHub releases page. It's a single file — no installer needed.</p>
+              <div class="run-platform-links">
+                <a href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
+                  🐧 Linux (amd64)
+                </a>
+                <a href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
+                  🍎 macOS (Apple Silicon)
+                </a>
+                <a href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
+                  🪟 Windows (x64)
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h4>Run it</h4>
+              <div class="code-block">
+                <span class="code-comment"># Linux / macOS</span>
+                <span class="code-line">chmod +x chakram-node &amp;&amp; ./chakram-node</span>
+              </div>
+              <div class="code-block" style="margin-top:0.5rem;">
+                <span class="code-comment"># Windows (PowerShell)</span>
+                <span class="code-line">.\chakram-node.exe</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h4>First-run bootstrap (fully automatic)</h4>
+              <p>On the very first start, <code class="t-mono lime-text">chakram-node</code> handles everything:</p>
+              <ul class="auto-list">
+                <li>Downloads geth for your platform from GitHub</li>
+                <li>Fetches the genesis block from <code class="t-mono lime-text">node.chakram.one</code></li>
+                <li>Initialises chain data and generates your validator keys</li>
+                <li>Connects to peers and starts syncing</li>
+                <li>Opens your browser to <code class="t-mono lime-text">localhost:8080</code></li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <h4>Register as a validator</h4>
+              <p>Once your node is synced, go to the <strong>Staking</strong> tab at <code class="t-mono lime-text">localhost:8080</code>, stake CHK, and register. Your node starts earning block rewards immediately.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="run-info reveal reveal-delay-2">
+          <div class="info-card">
+            <h4>What you need</h4>
+            <ul class="req-list">
+              <li>Windows 10+, macOS 11+, or Linux</li>
+              <li>4 GB RAM · 50 GB free disk</li>
+              <li>Internet connection (geth P2P — port 30303 outbound)</li>
+              <li>CHK to stake (not required just to sync)</li>
+            </ul>
+          </div>
+
+          <div class="info-card" style="margin-top:var(--space-4);">
+            <h4>Useful commands</h4>
+            <div class="cmd-list">
+              <div class="cmd-row"><code class="t-mono lime-text">./chakram-node</code><span>Start</span></div>
+              <div class="cmd-row"><code class="t-mono lime-text">./chakram-node status</code><span>Height + peers</span></div>
+              <div class="cmd-row"><code class="t-mono lime-text">./chakram-node stop</code><span>Graceful shutdown</span></div>
+              <div class="cmd-row"><code class="t-mono lime-text">./chakram-node --help</code><span>All options</span></div>
+            </div>
+          </div>
+
+          <div class="validator-cta-box" style="margin-top:var(--space-4);">
+            <p>Data stored in <code class="t-mono" style="font-size:0.78rem;">~/.chakram-node</code> on Mac/Linux or <code class="t-mono" style="font-size:0.78rem;">%APPDATA%\chakram-node</code> on Windows.</p>
+            <a href="https://github.com/Chakram-Labs/chakram/releases/latest"
+               target="_blank" rel="noopener" class="btn btn-primary" style="margin-top:var(--space-4);">
+              Download chakram-node →
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Option B: Docker / server ── -->
+    <div class="run-panel" id="tab-docker">
+      <div class="run-panel-inner">
+
+        <div class="run-steps reveal">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h4>Provision a server</h4>
+              <p>Any Linux VPS — GCP, AWS, Hetzner, DigitalOcean. Install Docker and Docker Compose. Open inbound ports:</p>
+              <ul class="auto-list">
+                <li><strong>26656</strong> — CometBFT P2P (consensus)</li>
+                <li><strong>30303</strong> — Geth P2P (execution)</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h4>Clone and bootstrap</h4>
+              <div class="code-block">
+                <span class="code-line">git clone https://github.com/Chakram-Labs/chakram</span>
+                <span class="code-line">cd chakram/docker</span>
+                <span class="code-line">bash setup.sh --mode fullnode \</span>
+                <span class="code-line code-indent">--network-url https://node.chakram.one</span>
+              </div>
+              <p style="margin-top:0.75rem;">Downloads genesis, peers, and initialises chain data.</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h4>Start the node</h4>
+              <div class="code-block">
+                <span class="code-line">docker compose --profile fullnode up -d</span>
+              </div>
+              <p style="margin-top:0.75rem;">Dashboard at <code class="t-mono lime-text">http://&lt;your-ip&gt;:8080</code>. Live logs:</p>
+              <div class="code-block" style="margin-top:0.5rem;">
+                <span class="code-line">docker compose --profile fullnode logs -f</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <h4>Register as a validator</h4>
+              <p>Open the <strong>Staking</strong> tab on your dashboard once synced. Stake CHK and register — you're in the active set immediately.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="run-info reveal reveal-delay-2">
+          <div class="info-card">
+            <h4>Server requirements</h4>
+            <ul class="req-list">
+              <li>Ubuntu 22.04+ (or any Linux with Docker)</li>
+              <li>4 vCPU · 8 GB RAM · 100 GB SSD</li>
+              <li>Docker 24+ &amp; Docker Compose v2</li>
+              <li>Inbound TCP 26656 and 30303 open</li>
+            </ul>
+          </div>
+
+          <div class="info-card" style="margin-top:var(--space-4);">
+            <h4>Useful commands</h4>
+            <div class="cmd-list">
+              <div class="cmd-row"><code class="t-mono lime-text" style="font-size:0.72rem;">docker compose --profile fullnode up -d</code><span>Start</span></div>
+              <div class="cmd-row"><code class="t-mono lime-text" style="font-size:0.72rem;">docker compose --profile fullnode logs -f</code><span>Logs</span></div>
+              <div class="cmd-row"><code class="t-mono lime-text" style="font-size:0.72rem;">docker compose --profile fullnode down</code><span>Stop</span></div>
+              <div class="cmd-row"><code class="t-mono lime-text" style="font-size:0.72rem;">curl localhost:8080/api/status</code><span>Sync check</span></div>
+            </div>
+          </div>
+
+          <div class="validator-cta-box" style="margin-top:var(--space-4);">
+            <p>Peer info, genesis URL, and enode are on the <strong>Settings</strong> page of the explorer.</p>
+            <a href="https://node.chakram.one/settings"
+               target="_blank" rel="noopener" class="btn btn-primary" style="margin-top:var(--space-4);">
+              View Connection Details →
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     TOKENOMICS
+══════════════════════════════════════ -->
+<section id="tokenomics" class="section-pad">
+  <div class="container">
+    <div class="reveal" style="text-align:center;margin-bottom:var(--space-4);">
+      <div style="display:inline-flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4);">
+        <span class="t-overline">CHK Token</span>
+      </div>
+      <h2 class="t-headline">Tokenomics</h2>
+      <p class="t-body" style="max-width:520px;margin:1rem auto 0;">
+        CHK is the native utility token powering staking, governance, and gas fees on Chakram.
+      </p>
+    </div>
+
+    <div class="tokenomics-grid reveal">
+      <div class="token-card">
+        <div class="token-card-title">Total Supply</div>
+        <div class="token-card-value">21,000,000 <span class="unit">CHK</span></div>
+        <div class="token-card-desc">Fixed maximum supply. No inflation beyond scheduled block rewards. Modeled after Bitcoin's capped issuance.</div>
+      </div>
+      <div class="token-card">
+        <div class="token-card-title">Block Reward</div>
+        <div class="token-card-value">5 <span class="unit">CHK</span></div>
+        <div class="token-card-desc">Per-block reward split between the proposer and all validators weighted by stake. Halves every 4 years.</div>
+      </div>
+      <div class="token-card">
+        <div class="token-card-title">Use Cases</div>
+        <div class="token-card-value" style="font-size:1.2rem;line-height:1.4;">Gas · Staking<br>Governance</div>
+        <div class="token-card-desc">CHK pays for transaction fees, secures the network via staking, and votes on on-chain governance proposals.</div>
+      </div>
+      <div class="token-card">
+        <div class="token-card-title">Chain ID</div>
+        <div class="token-card-value">11640</div>
+        <div class="token-card-desc">Use this chain ID in MetaMask or any EVM wallet to connect to Chakram. RPC: <span class="t-mono" style="color:var(--lime);font-size:0.78rem;">https://rpc.chakram.one</span></div>
+      </div>
+    </div>
+
+    <div class="halving-table reveal" style="max-width:640px;margin:var(--space-12) auto 0;">
+      <table>
+        <thead>
+          <tr>
+            <th>Era</th>
+            <th>Years</th>
+            <th>Block Reward</th>
+            <th>Est. CHK Issued</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="active-era">
+            <td>Era 1</td>
+            <td>2025–2029</td>
+            <td>5 CHK</td>
+            <td>~4,200,000</td>
+          </tr>
+          <tr>
+            <td>Era 2</td>
+            <td>2029–2033</td>
+            <td>2.5 CHK</td>
+            <td>~2,100,000</td>
+          </tr>
+          <tr>
+            <td>Era 3</td>
+            <td>2033–2037</td>
+            <td>1.25 CHK</td>
+            <td>~1,050,000</td>
+          </tr>
+          <tr>
+            <td>Era 4+</td>
+            <td>2037+</td>
+            <td>Halvings…</td>
+            <td>Converging to 21M</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     ROADMAP
+══════════════════════════════════════ -->
+<section id="roadmap" class="section-pad">
+  <div class="container">
+    <div class="reveal" style="text-align:center;margin-bottom:var(--space-4);">
+      <div style="display:inline-flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4);">
+        <span class="t-overline">Roadmap</span>
+      </div>
+      <h2 class="t-headline">What's Next</h2>
+    </div>
+
+    <div class="roadmap-grid">
+      <div class="phase-card done reveal">
+        <div class="phase-label">Phase 1 · Done</div>
+        <div class="phase-title">Core Protocol</div>
+        <ul class="phase-items">
+          <li>CometBFT + geth integration</li>
+          <li>Engine API bridge</li>
+          <li>Genesis tooling</li>
+          <li>Docker Compose stack</li>
+          <li>chakramctl CLI</li>
+        </ul>
+        <div class="phase-status">✓ Complete</div>
+      </div>
+
+      <div class="phase-card done reveal reveal-delay-1">
+        <div class="phase-label">Phase 2 · Done</div>
+        <div class="phase-title">Staking &amp; Validators</div>
+        <ul class="phase-items">
+          <li>StakingRegistry v2 contract</li>
+          <li>Delegation + rewards</li>
+          <li>Slashing logic</li>
+          <li>Validator metadata</li>
+          <li>Commission system</li>
+        </ul>
+        <div class="phase-status">✓ Complete</div>
+      </div>
+
+      <div class="phase-card active reveal reveal-delay-2">
+        <div class="phase-label">Phase 3 · Now</div>
+        <div class="phase-title">Mainnet &amp; Ecosystem</div>
+        <ul class="phase-items">
+          <li>Multi-validator testnet</li>
+          <li>Block explorer</li>
+          <li>RPC endpoint (rpc.chakram.one)</li>
+          <li>Developer documentation</li>
+          <li>Faucet &amp; onboarding</li>
+        </ul>
+        <div class="phase-status">→ In Progress</div>
+      </div>
+
+      <div class="phase-card reveal reveal-delay-3">
+        <div class="phase-label">Phase 4 · Upcoming</div>
+        <div class="phase-title">DeFi Primitives</div>
+        <ul class="phase-items">
+          <li>Native DEX contracts</li>
+          <li>Bridging to Ethereum</li>
+          <li>Governance voting UI</li>
+          <li>Permissionless validator set</li>
+          <li>Ecosystem grants</li>
+        </ul>
+        <div class="phase-status">◦ Planned</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     CTA BANNER
+══════════════════════════════════════ -->
+<section id="cta-banner" class="section-pad">
+  <div class="container">
+    <div class="cta-box reveal">
+      <h2 class="t-headline">Start Building on Chakram</h2>
+      <p class="t-body">
+        Deploy your contracts, run a validator, or just explore the chain.
+        The network is live and open to everyone.
+      </p>
+      <div class="hero-ctas">
+        <a href="https://github.com/Chakram-Labs/chakram" target="_blank" rel="noopener" class="btn btn-primary">GitHub →</a>
+        <a href="https://node.chakram.one" target="_blank" rel="noopener" class="btn btn-outline">Explorer</a>
+        <button class="btn btn-ghost" id="add-network-btn-2">+ Add CHK to MetaMask</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     FOOTER
+══════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <img src="assets/chk-logo.png" alt="Chakram">
+        <h3>Chakram</h3>
+        <p>A high-performance EVM blockchain with instant BFT finality. Built on CometBFT + go-ethereum.</p>
+      </div>
+
+      <div class="footer-col">
+        <h4>Protocol</h4>
+        <ul>
+          <li><a href="#about">About</a></li>
+          <li><a href="#architecture">Architecture</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#tokenomics">Tokenomics</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Build</h4>
+        <ul>
+          <li><a href="https://github.com/Chakram-Labs/chakram" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/Chakram-Labs/chakram/blob/main/docs/DEPLOYMENT.md" target="_blank" rel="noopener">Deployment Docs</a></li>
+          <li><a href="https://node.chakram.one" target="_blank" rel="noopener">Explorer</a></li>
+          <li><a href="https://rpc.chakram.one" target="_blank" rel="noopener">RPC Endpoint</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Network</h4>
+        <ul>
+          <li><a href="#validator">Run a Validator</a></li>
+          <li><a href="#roadmap">Roadmap</a></li>
+          <li><a href="https://github.com/Chakram-Labs/chakram/issues" target="_blank" rel="noopener">Issues</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>© 2025 Chakram Labs. Chain ID 11640.</p>
+      <div class="footer-bottom-links">
+        <a href="https://github.com/Chakram-Labs/chakram" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://node.chakram.one" target="_blank" rel="noopener">Explorer</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>

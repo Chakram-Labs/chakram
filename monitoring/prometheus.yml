@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+  external_labels:
+    chain: chakram
+
+scrape_configs:
+  # Node API metrics (dev and fullnode modes)
+  - job_name: chakram-node-dev
+    static_configs:
+      - targets: ['chakram-dev:8080']
+    metrics_path: /metrics
+
+  - job_name: chakram-node-fullnode
+    static_configs:
+      - targets: ['chakram-fullnode:8080']
+    metrics_path: /metrics
+
+  # localnet nodes
+  - job_name: chakram-localnet
+    static_configs:
+      - targets:
+          - 'chakram-node0:8080'
+          - 'chakram-node1:8081'
+          - 'chakram-node2:8082'
+          - 'chakram-node3:8083'
+    metrics_path: /metrics
+
+  # Prometheus self-monitoring
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

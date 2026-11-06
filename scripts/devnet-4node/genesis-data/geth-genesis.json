@@ -1,0 +1,56 @@
+{
+  "alloc": {
+    "0x1111111111111111111111111111111111111111": {
+      "balance": "1000000000000000000000000"
+    },
+    "0x1234567890123456789012345678901234567890": {
+      "balance": "1000000000000000000000000000"
+    },
+    "0x2222222222222222222222222222222222222222": {
+      "balance": "1000000000000000000000000"
+    },
+    "0x3333333333333333333333333333333333333333": {
+      "balance": "1000000000000000000000000"
+    },
+    "0x4444444444444444444444444444444444444444": {
+      "balance": "1000000000000000000000000"
+    },
+    "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF": {
+      "balance": "1000000000000000000000000000"
+    },
+    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266": {
+      "balance": "1000000000000000000000000000"
+    }
+  },
+  "config": {
+    "berlinBlock": 0,
+    "blobSchedule": {
+      "cancun": {
+        "baseFeeUpdateFraction": 3338477,
+        "max": 6,
+        "target": 3
+      }
+    },
+    "byzantiumBlock": 0,
+    "cancunTime": 0,
+    "chainId": 11642,
+    "constantinopleBlock": 0,
+    "eip150Block": 0,
+    "eip155Block": 0,
+    "eip158Block": 0,
+    "homesteadBlock": 0,
+    "istanbulBlock": 0,
+    "londonBlock": 0,
+    "mergeNetsplitBlock": 0,
+    "petersburgBlock": 0,
+    "shanghaiTime": 0,
+    "terminalTotalDifficulty": 0,
+    "terminalTotalDifficultyPassed": true
+  },
+  "difficulty": "0x0",
+  "extraData": "0x",
+  "gasLimit": "0x1C9C380",
+  "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "nonce": "0x0",
+  "timestamp": "0x0"
+}
