@@ -7,10 +7,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -18,8 +20,8 @@ import (
 )
 
 const (
-	gethVersion    = "1.17.6"
-	gethGitHubRepo = "ethereum/go-ethereum"
+	gethVersion   = "1.17.6"
+	gethBlobStore = "https://gethstore.blob.core.windows.net/builds"
 )
 
 // bootstrap ensures all required files are present in dataDir.
@@ -78,6 +80,14 @@ func ensureGeth(binDir string) error {
 
 	assetURL, archiveName, err := resolveGethAsset()
 	if err != nil {
+		// On macOS, geth pre-builts stop at v1.15.x — fall back to system geth if available.
+		if runtime.GOOS == "darwin" {
+			if sysGeth, lerr := exec.LookPath("geth"); lerr == nil {
+				fmt.Printf("  No pre-built geth v%s for darwin — using system geth at %s\n", gethVersion, sysGeth)
+				return copyExecutable(sysGeth, bin)
+			}
+			return fmt.Errorf("%w\n\n  Install geth on macOS with: brew install ethereum", err)
+		}
 		return err
 	}
 
@@ -97,43 +107,65 @@ func ensureGeth(binDir string) error {
 	return nil
 }
 
-// resolveGethAsset fetches the GitHub releases API to find the correct asset URL.
-func resolveGethAsset() (url, name string, err error) {
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/releases/tags/v%s", gethGitHubRepo, gethVersion)
-	resp, err := httpGetJSON(apiURL)
-	if err != nil {
-		return "", "", fmt.Errorf("github releases API: %w", err)
-	}
-
+// resolveGethAsset queries the gethstore blob CDN to find the download URL
+// for the geth binary matching the current OS/arch and gethVersion.
+func resolveGethAsset() (dlURL, name string, err error) {
 	goos := runtime.GOOS
 	goarch := runtime.GOARCH
-	// GitHub asset names use "amd64" for x86_64
-	prefix := fmt.Sprintf("geth-%s-%s-%s", goos, goarch, gethVersion)
+	// geth doesn't publish Windows arm64 builds; treat as amd64.
+	if goos == "windows" && goarch == "arm64" {
+		goarch = "amd64"
+	}
+
 	ext := ".tar.gz"
 	if goos == "windows" {
 		ext = ".zip"
 	}
 
-	type asset struct {
-		Name               string `json:"name"`
-		BrowserDownloadURL string `json:"browser_download_url"`
+	prefix := fmt.Sprintf("geth-%s-%s-%s-", goos, goarch, gethVersion)
+	listURL := fmt.Sprintf("%s?restype=container&comp=list&prefix=%s", gethBlobStore, prefix)
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get(listURL)
+	if err != nil {
+		return "", "", fmt.Errorf("blob store listing: %w", err)
 	}
-	type release struct {
-		Assets []asset `json:"assets"`
+	defer resp.Body.Close()
+
+	var listing struct {
+		Blobs []struct {
+			Name string `xml:"Name"`
+		} `xml:"Blobs>Blob"`
+	}
+	if err := xml.NewDecoder(resp.Body).Decode(&listing); err != nil {
+		return "", "", fmt.Errorf("parse blob listing: %w", err)
 	}
 
-	var rel release
-	body, _ := json.Marshal(resp)
-	if err := json.Unmarshal(body, &rel); err != nil {
-		return "", "", fmt.Errorf("parse releases response: %w", err)
-	}
-
-	for _, a := range rel.Assets {
-		if strings.HasPrefix(a.Name, prefix) && strings.HasSuffix(a.Name, ext) {
-			return a.BrowserDownloadURL, a.Name, nil
+	for _, blob := range listing.Blobs {
+		n := blob.Name
+		if strings.HasSuffix(n, ext) && !strings.Contains(n, "unstable") && !strings.Contains(n, "alltools") {
+			return fmt.Sprintf("%s/%s", gethBlobStore, n), n, nil
 		}
 	}
-	return "", "", fmt.Errorf("no geth asset found for %s/%s in release v%s (prefix: %s)", goos, goarch, gethVersion, prefix)
+	return "", "", fmt.Errorf("geth v%s not available for %s/%s on the blob CDN", gethVersion, goos, goarch)
+}
+
+// copyExecutable copies src to dst and marks dst executable.
+func copyExecutable(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return os.Chmod(dst, 0755)
 }
 
 func extractGeth(archivePath, destBin string) error {
