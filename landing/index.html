@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chakram — High-Performance EVM Blockchain</title>
-  <meta name="description" content="Chakram is a high-performance EVM-compatible blockchain combining CometBFT consensus with go-ethereum execution for fast, deterministic finality.">
+  <title>Chakram — EVM Blockchain with Instant BFT Finality</title>
+  <meta name="description" content="Chakram is an EVM-compatible blockchain combining CometBFT v0.40 consensus with go-ethereum execution for instant, deterministic finality. Chain ID 11640.">
   <meta name="theme-color" content="#070707">
 
   <!-- Open Graph -->
-  <meta property="og:title" content="Chakram — High-Performance EVM Blockchain">
-  <meta property="og:description" content="Sub-second finality. EVM-native. Permissionless validator set. Built on CometBFT + go-ethereum.">
+  <meta property="og:title" content="Chakram — EVM Blockchain with Instant BFT Finality">
+  <meta property="og:description" content="Instant BFT finality. Full EVM compatibility. On-chain staking registry. Built on CometBFT v0.40 + go-ethereum v1.17.">
   <meta property="og:image" content="https://chakram.one/assets/og.png">
   <meta property="og:url" content="https://chakram.one">
 
@@ -54,7 +54,7 @@
 <section id="hero">
   <div class="hero-content">
     <div class="hero-badge">
-      <span class="chip chip-lime chip-dot">Mainnet Live</span>
+      <span class="chip chip-lime chip-dot">Testnet Live</span>
     </div>
 
     <h1 class="t-display hero-title">
@@ -64,8 +64,8 @@
 
     <p class="hero-subtitle">
       Chakram combines CometBFT BFT consensus with go-ethereum execution.
-      Sub-second finality, full EVM compatibility, permissionless validators —
-      no waiting, no reorgs.
+      Instant deterministic finality, full EVM compatibility, on-chain staking registry —
+      no reorgs, no waiting for confirmations.
     </p>
 
     <div class="hero-ctas">
@@ -154,14 +154,14 @@
         </div>
         <h2 class="t-headline" style="margin-bottom:1.25rem;">A New Kind of<br>EVM Blockchain</h2>
         <p class="t-body-lg">
-          Chakram is a permissionless Layer 1 blockchain that separates consensus
-          from execution. CometBFT handles validator coordination and instant
-          BFT finality; go-ethereum handles smart contracts and EVM execution.
+          Chakram is a Layer 1 blockchain that cleanly separates consensus
+          from execution. CometBFT v0.40 handles validator coordination and instant
+          BFT finality; go-ethereum v1.17 handles smart contracts and EVM execution.
         </p>
         <p class="t-body" style="margin-top:1rem;">
-          Once a block is committed by &gt;⅔ of validators, it is final — forever.
+          Once a block is committed by &gt;⅔ of active validators, it is final — forever.
           No probabilistic finality, no long confirmation waits, no chain reorgs.
-          Your transactions are either in or out, within one second.
+          Your transactions are either in or out, within seconds.
         </p>
         <div style="margin-top:2rem;">
           <a href="https://github.com/Chakram-Labs/chakram" target="_blank" rel="noopener" class="btn btn-outline">View on GitHub →</a>
@@ -186,15 +186,15 @@
         <div class="pillar">
           <div class="icon-box icon-box-lime">🌐</div>
           <div class="pillar-body">
-            <h4>Permissionless Validators</h4>
-            <p>Anyone can stake CHK and join the validator set. No gatekeeping, no whitelists — pure on-chain governance.</p>
+            <h4>Graduated Validator Set</h4>
+            <p>Starts with a permissioned whitelist for stability, then automatically opens to anyone once the network reaches 20 validators, 548 days uptime, or a 66% governance vote.</p>
           </div>
         </div>
         <div class="pillar">
           <div class="icon-box icon-box-lime">🔒</div>
           <div class="pillar-body">
             <h4>On-Chain Staking Registry</h4>
-            <p>Validator registration, delegation, rewards, and slashing are governed by a transparent smart contract — no off-chain trust.</p>
+            <p>Validator registration, stake management, rewards, and slashing are governed by a transparent Solidity contract — no off-chain trust required.</p>
           </div>
         </div>
       </div>
@@ -251,7 +251,7 @@
     <div class="arch-cards reveal">
       <div class="arch-card">
         <div class="arch-card-title">Consensus</div>
-        <p>CometBFT v0.40 runs PBFT-style BFT rounds. &gt;⅔ weighted stake must sign a block before it's committed. One missed round → timeout, next proposer takes over.</p>
+        <p>CometBFT v0.40 runs PBFT-style BFT rounds. &gt;⅔ of active validators must sign a block before it's committed. One missed round → timeout, next proposer takes over. Currently equal voting power per validator.</p>
       </div>
       <div class="arch-card">
         <div class="arch-card-title">Execution</div>
@@ -259,11 +259,11 @@
       </div>
       <div class="arch-card">
         <div class="arch-card-title">Engine API</div>
-        <p>CometBFT talks to geth via the same Engine API that Ethereum's beacon chain uses: <code style="font-size:0.75rem;color:var(--lime);">engine_forkchoiceUpdated</code> + <code style="font-size:0.75rem;color:var(--lime);">engine_newPayload</code>.</p>
+        <p>CometBFT talks to geth via the same Engine API that Ethereum uses: <code style="font-size:0.75rem;color:var(--lime);">engine_forkchoiceUpdatedV3</code> + <code style="font-size:0.75rem;color:var(--lime);">engine_newPayloadV3</code>. JWT-authenticated over localhost.</p>
       </div>
       <div class="arch-card">
         <div class="arch-card-title">Staking Registry</div>
-        <p>A Solidity smart contract on-chain governs the entire validator lifecycle: registration, delegation, reward distribution, and slashing — fully transparent.</p>
+        <p>A Solidity smart contract on-chain governs the entire validator lifecycle: registration, stake management, reward routing, and slashing — fully transparent and verifiable.</p>
       </div>
     </div>
   </div>
@@ -299,28 +299,28 @@
       </div>
       <div class="feature-card reveal">
         <div class="feature-icon">📜</div>
-        <h3>On-Chain Governance</h3>
-        <p>Validator admission, parameter changes, and upgrades are decided by stake-weighted on-chain votes. No foundation veto.</p>
+        <h3>Validator Set Governance</h3>
+        <p>Stake-weighted on-chain vote to open the validator set to permissionless entry — 66% quorum, 7-day voting window, 30-day cooldown between proposals.</p>
       </div>
       <div class="feature-card reveal reveal-delay-1">
         <div class="feature-icon">🌐</div>
-        <h3>Decentralized Validators</h3>
-        <p>Auto-permissionless after launch: stake the minimum, submit a transaction, start validating. No application process.</p>
+        <h3>Permissionless Transition</h3>
+        <p>The validator set opens permissionlessly once any of three triggers fires: 548 days elapsed, 20 active validators reached, or a 66% governance vote passes.</p>
       </div>
       <div class="feature-card reveal reveal-delay-2">
         <div class="feature-icon">📊</div>
-        <h3>Slashing &amp; Accountability</h3>
-        <p>Misbehaving validators lose stake automatically. Double-sign or stay offline too long and the protocol enforces the penalty.</p>
+        <h3>Slashing &amp; Jailing</h3>
+        <p>Misbehaving validators are slashed and jailed by the ABCI layer. A configurable percentage of stake is burned or sent to treasury; jailed validators must unjail to re-enter.</p>
       </div>
       <div class="feature-card reveal">
         <div class="feature-icon">💎</div>
-        <h3>Delegated Staking</h3>
-        <p>Token holders can delegate CHK to validators and earn a share of block rewards. Liquid delegation with commission control.</p>
+        <h3>Delegation Registry (Planned)</h3>
+        <p>A future DelegationRegistry contract will let CHK holders delegate to validators and earn commission-adjusted rewards. Commission rates (0–100%) are already stored on-chain.</p>
       </div>
       <div class="feature-card reveal reveal-delay-1">
         <div class="feature-icon">🔑</div>
         <h3>Validator Metadata</h3>
-        <p>Each validator registers a name, website, description, and commission rate on-chain — discoverable by any delegator.</p>
+        <p>Each validator registers a name (up to 64 chars), website (up to 128 chars), and commission rate on-chain — readable by any smart contract or front-end.</p>
       </div>
       <div class="feature-card reveal reveal-delay-2">
         <div class="feature-icon">🔄</div>
@@ -563,19 +563,19 @@
 
     <div class="tokenomics-grid reveal">
       <div class="token-card">
-        <div class="token-card-title">Total Supply</div>
-        <div class="token-card-value">21,000,000 <span class="unit">CHK</span></div>
-        <div class="token-card-desc">Fixed maximum supply. No inflation beyond scheduled block rewards. Modeled after Bitcoin's capped issuance.</div>
+        <div class="token-card-title">Emission Model</div>
+        <div class="token-card-value" style="font-size:1.3rem;line-height:1.3;">Halving<br>Schedule</div>
+        <div class="token-card-desc">No pre-mine. All CHK is emitted purely as block rewards. Reward halves every 8,409,600 blocks with a permanent 0.3 CHK tail emission floor — no hard supply cap.</div>
       </div>
       <div class="token-card">
         <div class="token-card-title">Block Reward</div>
         <div class="token-card-value">5 <span class="unit">CHK</span></div>
-        <div class="token-card-desc">Per-block reward split between the proposer and all validators weighted by stake. Halves every 4 years.</div>
+        <div class="token-card-desc">Paid in full to the block proposer via Engine API withdrawal. Halves every ~8.4M blocks; never drops below the 0.3 CHK tail emission floor.</div>
       </div>
       <div class="token-card">
         <div class="token-card-title">Use Cases</div>
         <div class="token-card-value" style="font-size:1.2rem;line-height:1.4;">Gas · Staking<br>Governance</div>
-        <div class="token-card-desc">CHK pays for transaction fees, secures the network via staking, and votes on on-chain governance proposals.</div>
+        <div class="token-card-desc">CHK pays for EVM transaction fees, secures the network via validator staking, and participates in on-chain governance votes.</div>
       </div>
       <div class="token-card">
         <div class="token-card-title">Chain ID</div>
@@ -589,35 +589,35 @@
         <thead>
           <tr>
             <th>Era</th>
-            <th>Years</th>
+            <th>Block Range</th>
             <th>Block Reward</th>
-            <th>Est. CHK Issued</th>
+            <th>CHK Issued in Era</th>
           </tr>
         </thead>
         <tbody>
           <tr class="active-era">
             <td>Era 1</td>
-            <td>2025–2029</td>
+            <td>1 – 8,409,600</td>
             <td>5 CHK</td>
-            <td>~4,200,000</td>
+            <td>~42,048,000</td>
           </tr>
           <tr>
             <td>Era 2</td>
-            <td>2029–2033</td>
+            <td>8,409,601 – 16,819,200</td>
             <td>2.5 CHK</td>
-            <td>~2,100,000</td>
+            <td>~21,024,000</td>
           </tr>
           <tr>
             <td>Era 3</td>
-            <td>2033–2037</td>
+            <td>16,819,201 – 25,228,800</td>
             <td>1.25 CHK</td>
-            <td>~1,050,000</td>
+            <td>~10,512,000</td>
           </tr>
           <tr>
             <td>Era 4+</td>
-            <td>2037+</td>
-            <td>Halvings…</td>
-            <td>Converging to 21M</td>
+            <td>Continues…</td>
+            <td>Halvings to 0.3 CHK floor</td>
+            <td>Tail emission forever</td>
           </tr>
         </tbody>
       </table>
@@ -655,36 +655,37 @@
         <div class="phase-label">Phase 2 · Done</div>
         <div class="phase-title">Staking &amp; Validators</div>
         <ul class="phase-items">
-          <li>StakingRegistry v2 contract</li>
-          <li>Delegation + rewards</li>
-          <li>Slashing logic</li>
-          <li>Validator metadata</li>
-          <li>Commission system</li>
+          <li>StakingRegistry.sol contract</li>
+          <li>Permissioned validator whitelist</li>
+          <li>Slashing &amp; jailing logic</li>
+          <li>Validator metadata on-chain</li>
+          <li>Commission rate system</li>
+          <li>Governance vote to open validator set</li>
         </ul>
         <div class="phase-status">✓ Complete</div>
       </div>
 
       <div class="phase-card active reveal reveal-delay-2">
         <div class="phase-label">Phase 3 · Now</div>
-        <div class="phase-title">Mainnet &amp; Ecosystem</div>
+        <div class="phase-title">Testnet &amp; Ecosystem</div>
         <ul class="phase-items">
-          <li>Multi-validator testnet</li>
-          <li>Block explorer</li>
-          <li>RPC endpoint (rpc.chakram.one)</li>
-          <li>Developer documentation</li>
-          <li>Faucet &amp; onboarding</li>
+          <li>Multi-validator testnet (chakram-testnet-1)</li>
+          <li>Block explorer (node.chakram.one)</li>
+          <li>Public RPC (rpc.chakram.one)</li>
+          <li>chakram-node standalone binary</li>
+          <li>Developer documentation &amp; faucet</li>
         </ul>
         <div class="phase-status">→ In Progress</div>
       </div>
 
       <div class="phase-card reveal reveal-delay-3">
         <div class="phase-label">Phase 4 · Upcoming</div>
-        <div class="phase-title">DeFi Primitives</div>
+        <div class="phase-title">Delegation &amp; DeFi</div>
         <ul class="phase-items">
-          <li>Native DEX contracts</li>
-          <li>Bridging to Ethereum</li>
-          <li>Governance voting UI</li>
+          <li>DelegationRegistry contract</li>
+          <li>Stake-weighted validator voting power</li>
           <li>Permissionless validator set</li>
+          <li>Bridging to Ethereum</li>
           <li>Ecosystem grants</li>
         </ul>
         <div class="phase-status">◦ Planned</div>
@@ -756,7 +757,7 @@
     </div>
 
     <div class="footer-bottom">
-      <p>© 2025 Chakram Labs. Chain ID 11640.</p>
+      <p>© 2026 Chakram Labs. Chain ID 11640 · chakram-testnet-1.</p>
       <div class="footer-bottom-links">
         <a href="https://github.com/Chakram-Labs/chakram" target="_blank" rel="noopener">GitHub</a>
         <a href="https://node.chakram.one" target="_blank" rel="noopener">Explorer</a>
