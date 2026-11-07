@@ -55,18 +55,23 @@ Usage:
   chakram-node version           Print version
 
 Start flags:
-  --network URL    Bootstrap network URL (default: https://node.chakram.one)
+  --network URL    Fallback bootstrap URL (default: https://node.chakram.one)
+  --seeds LIST     Comma-separated DNS seed names for peer discovery
+                   (default: seeds.chakram.one)
+                   Multiple orgs can publish seeds under their own domain;
+                   add them here without changing code.
   --data-dir DIR   Data directory (default: ~/.chakram-node)
   --no-browser     Don't open the browser on startup
   --reward ADDR    0x-prefixed EVM address for block rewards
                    (auto-generated on first run if omitted)
 
 On first run, chakram-node will:
-  1. Download geth for your platform
-  2. Fetch genesis files from the bootstrap network
-  3. Initialize chain data
-  4. Generate validator keys
-  5. Start syncing and open the status page in your browser
+  1. Discover peers via DNS (seeds.chakram.one + any --seeds you add)
+  2. Download geth for your platform
+  3. Fetch genesis files from a discovered bootstrap node
+  4. Initialize chain data
+  5. Generate validator keys
+  6. Start syncing and open the status page in your browser
 
 `)
 }
@@ -76,9 +81,10 @@ func fatalf(format string, args ...any) {
 	os.Exit(1)
 }
 
-func startFlags(args []string) (network, dataDir, reward string, noBrowser bool) {
+func startFlags(args []string) (network, dataDir, reward, seeds string, noBrowser bool) {
 	fs := flag.NewFlagSet("start", flag.ExitOnError)
-	fs.StringVar(&network, "network", "https://node.chakram.one", "bootstrap network URL")
+	fs.StringVar(&network, "network", "https://node.chakram.one", "fallback bootstrap URL")
+	fs.StringVar(&seeds, "seeds", defaultSeedsDNS, "comma-separated DNS seed names")
 	fs.StringVar(&dataDir, "data-dir", defaultDataDir(), "data directory")
 	fs.StringVar(&reward, "reward", "", "EVM address for block rewards (auto-generated if empty)")
 	fs.BoolVar(&noBrowser, "no-browser", false, "don't open browser on startup")

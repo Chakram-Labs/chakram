@@ -26,7 +26,8 @@ const (
 
 // bootstrap ensures all required files are present in dataDir.
 // It's idempotent — safe to call on every startup.
-func bootstrap(dataDir, networkURL string) error {
+// apiURLs is tried in order for genesis fetch; first success wins.
+func bootstrap(dataDir string, apiURLs []string) error {
 	dirs := []string{
 		filepath.Join(dataDir, "geth-data"),
 		filepath.Join(dataDir, "comet"),
@@ -44,7 +45,7 @@ func bootstrap(dataDir, networkURL string) error {
 		return fmt.Errorf("geth download: %w", err)
 	}
 
-	genesisChanged, err := ensureGenesis(dataDir, networkURL)
+	genesisChanged, err := ensureGenesis(dataDir, apiURLs)
 	if err != nil {
 		return fmt.Errorf("genesis: %w", err)
 	}
@@ -242,7 +243,8 @@ func extractGethZip(archivePath, destBin string) error {
 
 // ── genesis files ──────────────────────────────────────────────────────────
 
-func ensureGenesis(dataDir, networkURL string) (changed bool, err error) {
+// ensureGenesis fetches genesis files from the first responsive API URL.
+func ensureGenesis(dataDir string, apiURLs []string) (changed bool, err error) {
 	cometGenesis := filepath.Join(dataDir, "comet", "config", "genesis.json")
 	gethGenesis := filepath.Join(dataDir, "comet", "config", "geth-genesis.json")
 
@@ -250,55 +252,79 @@ func ensureGenesis(dataDir, networkURL string) (changed bool, err error) {
 		return false, nil
 	}
 
-	fmt.Printf("  Fetching genesis from %s ...\n", networkURL)
-	resp, err := httpGetJSON(networkURL + "/api/genesis")
-	if err != nil {
-		return false, fmt.Errorf("fetch genesis: %w", err)
-	}
-
 	type genesisResp struct {
 		CometGenesis json.RawMessage `json:"comet_genesis"`
 		GethGenesis  json.RawMessage `json:"geth_genesis"`
 	}
-	var gr genesisResp
-	body, _ := json.Marshal(resp)
-	if err := json.Unmarshal(body, &gr); err != nil {
-		return false, fmt.Errorf("parse genesis response: %w", err)
-	}
-	if len(gr.CometGenesis) == 0 || len(gr.GethGenesis) == 0 {
-		return false, fmt.Errorf("genesis response missing comet_genesis or geth_genesis")
+
+	var lastErr error
+	for _, apiURL := range apiURLs {
+		fmt.Printf("  Fetching genesis from %s ...\n", apiURL)
+		resp, err := httpGetJSON(apiURL + "/api/genesis")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		var gr genesisResp
+		body, _ := json.Marshal(resp)
+		if err := json.Unmarshal(body, &gr); err != nil {
+			lastErr = err
+			continue
+		}
+		if len(gr.CometGenesis) == 0 || len(gr.GethGenesis) == 0 {
+			lastErr = fmt.Errorf("incomplete genesis from %s", apiURL)
+			continue
+		}
+
+		cometPretty, _ := json.MarshalIndent(json.RawMessage(gr.CometGenesis), "", "  ")
+		gethPretty, _ := json.MarshalIndent(json.RawMessage(gr.GethGenesis), "", "  ")
+
+		if err := os.WriteFile(cometGenesis, cometPretty, 0644); err != nil {
+			return false, err
+		}
+		if err := os.WriteFile(gethGenesis, gethPretty, 0644); err != nil {
+			return false, err
+		}
+		fmt.Printf("  Genesis files written.\n")
+		return true, nil
 	}
 
-	cometPretty, _ := json.MarshalIndent(json.RawMessage(gr.CometGenesis), "", "  ")
-	gethPretty, _ := json.MarshalIndent(json.RawMessage(gr.GethGenesis), "", "  ")
-
-	if err := os.WriteFile(cometGenesis, cometPretty, 0644); err != nil {
-		return false, err
+	if lastErr != nil {
+		return false, fmt.Errorf("genesis fetch failed from all %d endpoint(s): %w", len(apiURLs), lastErr)
 	}
-	if err := os.WriteFile(gethGenesis, gethPretty, 0644); err != nil {
-		return false, err
-	}
-	fmt.Printf("  Genesis files written.\n")
-	return true, nil
+	return false, fmt.Errorf("no API endpoints available for genesis fetch")
 }
 
-// fetchPeerInfo returns comet_peer, geth_enode, and staking_contract from the bootstrap node.
-func fetchPeerInfo(networkURL string) (cometPeer, gethEnode, stakingContract string, err error) {
-	resp, err := httpGetJSON(networkURL + "/api/node-info")
-	if err != nil {
-		return "", "", "", err
-	}
+// fetchNetworkInfo queries the first responsive API URL for peer + staking info.
+// It enriches the provided seedList in-place (adds comet peer + geth enode from
+// each API's /api/node-info) and returns the staking contract address.
+func fetchNetworkInfo(apiURLs []string, seeds *seedList) (stakingContract string) {
 	type nodeInfo struct {
 		CometPeer       string `json:"comet_peer"`
 		GethEnode       string `json:"geth_enode"`
 		StakingContract string `json:"staking_contract"`
 	}
-	var ni nodeInfo
-	body, _ := json.Marshal(resp)
-	if err := json.Unmarshal(body, &ni); err != nil {
-		return "", "", "", err
+	for _, apiURL := range apiURLs {
+		resp, err := httpGetJSON(apiURL + "/api/node-info")
+		if err != nil {
+			continue
+		}
+		var ni nodeInfo
+		body, _ := json.Marshal(resp)
+		if json.Unmarshal(body, &ni) != nil {
+			continue
+		}
+		if ni.CometPeer != "" {
+			seeds.CometPeers = appendUniq(seeds.CometPeers, ni.CometPeer)
+		}
+		if ni.GethEnode != "" {
+			seeds.GethEnodes = appendUniq(seeds.GethEnodes, ni.GethEnode)
+		}
+		if stakingContract == "" {
+			stakingContract = ni.StakingContract
+		}
 	}
-	return ni.CometPeer, ni.GethEnode, ni.StakingContract, nil
+	return stakingContract
 }
 
 // ── JWT secret ─────────────────────────────────────────────────────────────

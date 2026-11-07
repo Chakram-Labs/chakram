@@ -10,54 +10,84 @@ import (
 	"time"
 )
 
+// splitSeeds splits a comma-separated seed DNS list, trimming whitespace and
+// dropping empty entries.
+func splitSeeds(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if t := strings.TrimSpace(part); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // ── start ──────────────────────────────────────────────────────────────────
 
 func cmdStart(args []string) {
-	networkURL, dataDir, rewardAddr, noBrowser := startFlags(args)
+	networkURL, dataDir, rewardAddr, seedsDNS, noBrowser := startFlags(args)
 
 	fmt.Printf("Chakram Node\n")
 	fmt.Printf("  Data dir : %s\n", dataDir)
-	fmt.Printf("  Network  : %s\n", networkURL)
 	fmt.Printf("\n")
 
-	// Bootstrap: download geth, fetch genesis, init chain data.
-	fmt.Printf("==> Bootstrap\n")
-	if err := bootstrap(dataDir, networkURL); err != nil {
+	// ── 1. Peer discovery via DNS ──────────────────────────────────────────
+	fmt.Printf("==> Peer Discovery\n")
+	dnsNames := splitSeeds(seedsDNS)
+	seeds := resolveSeedsDNS(dnsNames)
+
+	// Always include the fallback network URL as an API source.
+	if networkURL != "" {
+		seeds.APIURLs = appendUniq(seeds.APIURLs, networkURL)
+	}
+
+	if len(seeds.CometPeers) > 0 || len(seeds.GethEnodes) > 0 {
+		fmt.Printf("  DNS resolved  : %d comet peer(s), %d geth enode(s), %d API endpoint(s)\n",
+			len(seeds.CometPeers), len(seeds.GethEnodes), len(seeds.APIURLs))
+	} else {
+		fmt.Printf("  DNS lookup returned no peers — will try fallback URL\n")
+	}
+
+	// ── 2. Bootstrap ──────────────────────────────────────────────────────
+	fmt.Printf("\n==> Bootstrap\n")
+	if err := bootstrap(dataDir, seeds.APIURLs); err != nil {
 		fatalf("bootstrap failed: %v", err)
 	}
 
-	// Fetch peer info (non-fatal — node can still start without peers).
-	var cometPeer, gethEnode, stakingContract string
-	fmt.Printf("  Fetching peer info...\n")
-	if p, e, s, err := fetchPeerInfo(networkURL); err == nil {
-		cometPeer = p
-		gethEnode = e
-		stakingContract = s
-		fmt.Printf("  CometBFT peer    : %s\n", cometPeer)
-		fmt.Printf("  Geth bootnode    : %s\n", gethEnode)
-		if stakingContract != "" {
-			fmt.Printf("  Staking contract : %s\n", stakingContract)
+	// ── 3. Enrich peer list from live API endpoints ────────────────────────
+	// fetchNetworkInfo adds each API node's own comet peer + geth enode to
+	// seeds (in case DNS didn't have them yet) and returns staking contract.
+	fmt.Printf("  Querying network info...\n")
+	stakingContract := fetchNetworkInfo(seeds.APIURLs, &seeds)
+
+	if len(seeds.CometPeers) > 0 {
+		for _, p := range seeds.CometPeers {
+			fmt.Printf("  CometBFT peer    : %s\n", p)
 		}
-	} else {
-		fmt.Printf("  Warning: could not fetch peer info: %v\n", err)
+	}
+	if len(seeds.GethEnodes) > 0 {
+		for _, e := range seeds.GethEnodes {
+			fmt.Printf("  Geth bootnode    : %s\n", e)
+		}
+	}
+	if stakingContract != "" {
+		fmt.Printf("  Staking contract : %s\n", stakingContract)
 	}
 
-	// Resolve chain ID from downloaded genesis.
-	chainID := resolveChainID(dataDir)
+	// ── 4. Chain setup ────────────────────────────────────────────────────
+	chainID    := resolveChainID(dataDir)
+	rewardAddr  = resolveRewardAddr(dataDir, rewardAddr)
 
-	// Resolve reward address.
-	rewardAddr = resolveRewardAddr(dataDir, rewardAddr)
-
+	// ── 5. Start geth ────────────────────────────────────────────────────
 	fmt.Printf("\n==> Starting geth\n")
-	gethProc, err := startGeth(dataDir, filepath.Join(dataDir, "jwt.hex"), gethEnode)
+	gethProc, err := startGeth(dataDir, filepath.Join(dataDir, "jwt.hex"),
+		strings.Join(seeds.GethEnodes, ","))
 	if err != nil {
 		fatalf("%v", err)
 	}
 
-	// Write PID so `chakram-node stop` can find the process group.
 	_ = writePID(dataDir, os.Getpid())
 
-	// Wait for geth RPC to be ready.
 	waitCtx, waitCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer waitCancel()
 	fmt.Printf("  Waiting for geth...\n")
@@ -67,6 +97,7 @@ func cmdStart(args []string) {
 	}
 	fmt.Printf("  geth ready.\n")
 
+	// ── 6. Start consensus ───────────────────────────────────────────────
 	fmt.Printf("\n==> Starting consensus\n")
 	fmt.Printf("  Chain ID     : %s\n", chainID)
 	fmt.Printf("  Reward addr  : %s\n", rewardAddr)
@@ -76,13 +107,7 @@ func cmdStart(args []string) {
 	if !noBrowser {
 		go func() {
 			time.Sleep(2 * time.Second)
-			if webUI() != nil {
-				openBrowser("http://localhost:8080")
-			} else {
-				// No embedded web UI — open the public explorer.
-				// The local node still provides the API at localhost:8080.
-				openBrowser("http://localhost:8080")
-			}
+			openBrowser("http://localhost:8080")
 		}()
 	}
 
@@ -94,8 +119,6 @@ func cmdStart(args []string) {
 		fmt.Println("\nShutting down...")
 		cancel()
 	}()
-
-	// Also cancel if geth exits unexpectedly.
 	go func() {
 		gethProc.Wait()
 		fmt.Println("geth process exited.")
@@ -106,7 +129,7 @@ func cmdStart(args []string) {
 		dataDir:         dataDir,
 		chainID:         chainID,
 		rewardAddr:      rewardAddr,
-		peers:           cometPeer,
+		peers:           strings.Join(seeds.CometPeers, ","),
 		stakingContract: stakingContract,
 	}); err != nil {
 		gethProc.Process.Kill()
@@ -120,7 +143,7 @@ func cmdStart(args []string) {
 // ── status ─────────────────────────────────────────────────────────────────
 
 func cmdStatus(args []string) {
-	_, dataDir, _, _ := startFlags(args)
+	_, dataDir, _, _, _ := startFlags(args)
 
 	pid, err := readPID(dataDir)
 	if err != nil {
@@ -163,7 +186,7 @@ func cmdStatus(args []string) {
 // ── stop ───────────────────────────────────────────────────────────────────
 
 func cmdStop(args []string) {
-	_, dataDir, _, _ := startFlags(args)
+	_, dataDir, _, _, _ := startFlags(args)
 
 	pid, err := readPID(dataDir)
 	if err != nil {

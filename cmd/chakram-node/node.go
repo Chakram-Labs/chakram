@@ -58,6 +58,11 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 	cmtCfg.P2P.AllowDuplicateIP = true
 	cmtCfg.RPC.ListenAddress = "tcp://0.0.0.0:26657"
 	if cfg.peers != "" {
+		// Use discovered peers as both seeds (for PEX address discovery) and
+		// persistent peers (so blocksync can download blocks immediately).
+		// PEX will grow the address book over time; on future restarts the
+		// node reconnects from addrbook.json without needing seeds at all.
+		cmtCfg.P2P.Seeds = cfg.peers
 		cmtCfg.P2P.PersistentPeers = cfg.peers
 	}
 	cmtCfg.Consensus.TimeoutPropose = 2 * time.Second

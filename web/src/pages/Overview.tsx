@@ -1,96 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, StatusResponse, BlockSummary, trunc, formatTime, getGethRpc, getBase } from '../api/client';
-import { AlertTriangle, AlertCircle, Layers3, Cpu, Network, Link2, RefreshCw, Wallet } from 'lucide-react';
+import { api, StatusResponse, BlockSummary, trunc, formatTime } from '../api/client';
+import { AlertTriangle, AlertCircle, Layers3, Cpu, Network, Link2, RefreshCw } from 'lucide-react';
 import { StatCard, GradCard, Chip } from '../components/ui';
-
-// ─── MetaMask add-network card ────────────────────────────────────────────────
-
-declare global {
-  interface Window {
-    ethereum?: { request: (a: { method: string; params?: unknown[] }) => Promise<unknown>; isMetaMask?: boolean };
-  }
-}
-
-function MetaMaskCard({ chainId }: { chainId: string }) {
-  const [state, setState] = useState<'idle' | 'ok' | 'err'>('idle');
-  const [msg, setMsg] = useState('');
-
-  const hasMetaMask = typeof window !== 'undefined' && !!window.ethereum;
-  // EVM chain ID from CometBFT chain_id is not the same thing —
-  // we use the fixed network ID 11642 (0x2D7A) set in .env.
-  const evmChainIdHex = '0x2D7A';
-  const rpcUrl       = getGethRpc();
-  const explorerUrl  = getBase();
-
-  async function addNetwork() {
-    if (!window.ethereum) return;
-    setState('idle'); setMsg('');
-    try {
-      await window.ethereum.request({
-        method: 'wallet_addEthereumChain',
-        params: [{
-          chainId: evmChainIdHex,
-          chainName: 'Chakram',
-          nativeCurrency: { name: 'Chakram', symbol: 'CHK', decimals: 18 },
-          rpcUrls: [rpcUrl],
-          blockExplorerUrls: [explorerUrl],
-        }],
-      });
-      setState('ok'); setMsg('Network added to MetaMask!');
-    } catch (err: unknown) {
-      setState('err');
-      setMsg(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  return (
-    <div className="rounded-xl border border-slate-100 border-white/5 bg-white bg-gray-900 shadow-sm overflow-hidden">
-      <div className="bg-gradient-to-tr from-orange-500 to-amber-400 px-6 py-5 flex items-center gap-3">
-        <Wallet size={16} className="text-white" strokeWidth={2} />
-        <div>
-          <h6 className="text-sm font-semibold text-white">Connect Wallet</h6>
-          <p className="mt-0.5 text-[11px] text-white/70">Add Chakram to MetaMask or any EVM wallet</p>
-        </div>
-      </div>
-      <div className="px-6 py-5">
-        <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
-          {[
-            ['Network',   'Chakram'],
-            ['Symbol',    'CHK'],
-            ['Chain ID',  '11642'],
-            ['Decimals',  '18'],
-            ['RPC URL',   rpcUrl],
-            ['Explorer',  explorerUrl],
-          ].map(([k, v]) => (
-            <div key={k} className="flex flex-col">
-              <span className="text-[10px] font-bold uppercase text-gray-500">{k}</span>
-              <span className="font-mono text-white truncate">{v}</span>
-            </div>
-          ))}
-        </div>
-
-        {hasMetaMask ? (
-          <button
-            onClick={addNetwork}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-tr from-orange-500 to-amber-400 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-orange-500/20 hover:shadow-orange-500/40 transition-shadow"
-          >
-            <Wallet size={14} strokeWidth={2} />
-            Add Chakram to MetaMask
-          </button>
-        ) : (
-          <p className="text-xs text-gray-500">
-            MetaMask not detected — install it, then add the network details above manually,
-            or use any EVM-compatible wallet (Rabby, Frame, Coinbase Wallet).
-          </p>
-        )}
-
-        {state === 'ok' && <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{msg}</p>}
-        {state === 'err' && <p className="mt-2 text-xs text-red-500 dark:text-red-400">{msg}</p>}
-      </div>
-    </div>
-  );
-}
 
 function Banner({ variant, text }: { variant: 'error' | 'warning'; text: string }) {
   const s = variant === 'error'
@@ -318,14 +230,9 @@ export default function Overview() {
         </div>
       </div>
 
-      {/* MetaMask connect */}
-      <div className="mb-6">
-        <MetaMaskCard chainId={status.chain_id} />
-      </div>
-
       {/* Height gap info */}
       {status.geth_available && Math.abs(status.height - status.geth_height) > 0 && (
-        <div className="rounded-xl border border-slate-100 border-white/5 bg-white bg-gray-900 shadow-sm px-5 py-4 flex items-center gap-3">
+        <div className="rounded-xl border border-white/5 bg-gray-900 shadow-sm px-5 py-4 flex items-center gap-3">
           <RefreshCw size={14} className="text-gray-500 shrink-0" strokeWidth={2} />
           <span className="text-sm text-gray-500">Height gap: </span>
           <span className={`text-sm font-semibold ${Math.abs(status.height - status.geth_height) > 2 ? 'text-amber-600 dark:text-amber-400' : 'text-white'}`}>
