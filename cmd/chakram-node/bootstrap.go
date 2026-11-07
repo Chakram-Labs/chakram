@@ -123,6 +123,7 @@ func buildGenesisNodeGethGenesis() map[string]any {
 			"constantinopleBlock":           0,
 			"petersburgBlock":               0,
 			"istanbulBlock":                 0,
+			"berlinBlock":                   0,
 			"londonBlock":                   0,
 			"mergeNetsplitBlock":            0,
 			"shanghaiTime":                  0,
