@@ -142,6 +142,7 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 		StaticFS:            webUI(),
 		StakingContractAddr: cfg.stakingContract,
 		NodeKeyPath:         cfg.nodeKeyPath,
+		RewardAddress:       cfg.rewardAddr,
 		P2PHost:             cfg.p2pHost,
 	}
 	apiSrv := chakramapi.New(apiCfg, logger)
