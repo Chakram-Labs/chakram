@@ -91,8 +91,7 @@ func cmdStart(args []string) {
 
 	// ── 5. Start geth ────────────────────────────────────────────────────
 	fmt.Printf("\n==> Starting geth\n")
-	gethProc, err := startGeth(dataDir, filepath.Join(dataDir, "jwt.hex"),
-		strings.Join(seeds.GethEnodes, ","))
+	gethProc, err := startGeth(dataDir, filepath.Join(dataDir, "jwt.hex"))
 	if err != nil {
 		fatalf("%v", err)
 	}

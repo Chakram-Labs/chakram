@@ -14,12 +14,18 @@ import (
 )
 
 // gethCmd builds and starts the geth subprocess.
-func startGeth(dataDir, jwtPath, bootnodes string) (*exec.Cmd, error) {
+func startGeth(dataDir, jwtPath string) (*exec.Cmd, error) {
 	gethBin := gethBinPath(filepath.Join(dataDir, "bin"))
 
 	args := []string{
 		"--datadir", filepath.Join(dataDir, "geth-data"),
 		"--networkid", "11640",
+		// Geth is a pure execution engine — all block ordering and state
+		// advancement comes from our consensus layer via the Engine API.
+		// P2P discovery is disabled so geth cannot snap-sync state from peers
+		// and race against the Engine API replay, which corrupts the trie.
+		"--nodiscover",
+		"--maxpeers", "0",
 		"--syncmode", "full",
 		"--gcmode", "full",
 		"--history.transactions", "0",
@@ -34,11 +40,6 @@ func startGeth(dataDir, jwtPath, bootnodes string) (*exec.Cmd, error) {
 		"--authrpc.port", "8551",
 		"--authrpc.jwtsecret", jwtPath,
 		"--authrpc.vhosts", "localhost,127.0.0.1",
-		// P2P
-		"--port", "30303",
-	}
-	if bootnodes != "" {
-		args = append(args, "--bootnodes", bootnodes)
 	}
 
 	cmd := exec.Command(gethBin, args...)
