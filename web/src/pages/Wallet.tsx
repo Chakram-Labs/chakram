@@ -41,7 +41,16 @@ function NodeWalletSection() {
   const [keyLoading, setKeyLoading] = useState(false);
 
   useEffect(() => {
-    api.nodeWallet().then(setWallet).catch(() => setWallet({ address: '', balance_wei: '0', has_key: false }));
+    let cancelled = false;
+    function load() {
+      api.nodeWallet()
+        .then(w => { if (!cancelled) setWallet(w); })
+        .catch(() => {
+          if (!cancelled) setTimeout(load, 3000);
+        });
+    }
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   async function handleShowKey() {
