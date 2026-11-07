@@ -3,7 +3,7 @@ set -e
 
 HOME_DIR="${CHAKRAM_HOME:-/data/chakram}"
 CHAIN_ID="${CHAKRAM_CHAIN_ID:-chakram-devnet-1}"
-REWARD_ADDR="${CHAKRAM_REWARD_ADDRESS:-0x1111111111111111111111111111111111111111}"
+REWARD_ADDR="${CHAKRAM_REWARD_ADDRESS:-}"
 ENGINE_URL="${CHAKRAM_ENGINE_URL:-http://geth:8551}"
 GETH_RPC="${CHAKRAM_GETH_RPC:-http://geth:8545}"
 P2P_PORT="${CHAKRAM_P2P_PORT:-26656}"
@@ -92,6 +92,11 @@ if [ -n "$API_ADDR" ]; then
   fi
 fi
 
+REWARD_ARG=""
+if [ -n "$REWARD_ADDR" ]; then
+  REWARD_ARG="--reward-address $REWARD_ADDR"
+fi
+
 PEERS_ARG=""
 if [ -n "$PEERS" ]; then
   PEERS_ARG="--peers $PEERS"
@@ -109,11 +114,11 @@ exec chakram start \
   --home "$HOME_DIR" \
   --engine-url "$ENGINE_URL" \
   --jwt-path "$JWT_PATH" \
-  --reward-address "$REWARD_ADDR" \
   --geth-rpc "$GETH_RPC" \
   --p2p-port "$P2P_PORT" \
   --rpc-port "$RPC_PORT" \
   --log-level "$LOG_LEVEL" \
+  $REWARD_ARG \
   $API_ARGS \
   $PEERS_ARG \
   $STAKING_ARG \

@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -19,6 +20,9 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"golang.org/x/crypto/sha3"
 
 	cmtconfig "github.com/cometbft/cometbft/config"
 	cmtlog "github.com/cometbft/cometbft/libs/log"
@@ -167,8 +171,11 @@ func cmdStart(args []string) {
 	home := fs.String("home", filepath.Join(os.Getenv("HOME"), ".chakram"), "CometBFT home directory")
 	engineURL := fs.String("engine-url", "http://127.0.0.1:8551", "geth Engine API URL")
 	jwtPath := fs.String("jwt-path", "", "path to JWT secret file (hex-encoded 32 bytes)")
-	rewardAddr := fs.String("reward-address", "", "0x-prefixed EVM address to receive block rewards")
+	rewardAddr := fs.String("reward-address", "", "0x-prefixed EVM address to receive block rewards (auto-generated if empty)")
 	gethRPC := fs.String("geth-rpc", "http://127.0.0.1:8545", "geth plain HTTP RPC URL (for health gate)")
+	gethDataDir := fs.String("geth-data-dir", "", "path to geth --datadir (for snapshots)")
+	gethBin := fs.String("geth-bin", "", "path to geth binary (for snapshots)")
+	snapshotInterval := fs.Int64("snapshot-interval", 0, "blocks between snapshots; 0 = disabled")
 	logLevel := fs.String("log-level", "info", "log level: debug, info, warn, error")
 	faultyRate := fs.Float64("faulty-rate", 0, "faulty proposer rate 0.0-1.0 (build tag: faulty only)")
 	p2pPort := fs.Int("p2p-port", 26656, "CometBFT P2P listen port")
@@ -188,12 +195,11 @@ func cmdStart(args []string) {
 		fmt.Fprintln(os.Stderr, "chakram start: --jwt-path is required")
 		os.Exit(1)
 	}
-	if *rewardAddr == "" {
-		fmt.Fprintln(os.Stderr, "chakram start: --reward-address is required")
-		os.Exit(1)
-	}
 
 	logger := makeLogger(*logLevel)
+
+	resolvedRewardAddr := resolveRewardAddr(*home, *rewardAddr)
+	nodeKeyPath := filepath.Join(*home, "reward-key.json")
 
 	eng, err := engine.NewClientFromFile(*engineURL, *jwtPath)
 	if err != nil {
@@ -203,9 +209,12 @@ func cmdStart(args []string) {
 
 	baseApp, err := chakramabci.NewChakramApp(eng, chakramabci.Config{
 		Home:                *home,
-		RewardAddress:       *rewardAddr,
+		RewardAddress:       resolvedRewardAddr,
 		GethRPCURL:          *gethRPC,
 		StakingContractAddr: *stakingContract,
+		GethDataDir:         *gethDataDir,
+		GethBin:             *gethBin,
+		SnapshotInterval:    *snapshotInterval,
 	}, logger)
 	if err != nil {
 		logger.Error("create ABCI app", "err", err)
@@ -285,10 +294,11 @@ func cmdStart(args []string) {
 			FaucetPrivKey:       *apiFaucetKey,
 			LogFile:             *apiLogFile,
 			StaticDir:           *apiStaticDir,
-			RewardAddress:       *rewardAddr,
+			RewardAddress:       resolvedRewardAddr,
 			StakingContractAddr: *stakingContract,
 			HomeDir:             *home,
 			P2PHost:             *apiP2PHost,
+			NodeKeyPath:         nodeKeyPath,
 		}, logger)
 		if err := apiSrv.Start(); err != nil {
 			logger.Error("start node api", "err", err)
@@ -344,4 +354,54 @@ func makeLogger(level string) *slog.Logger {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+type rewardKeyFile struct {
+	Address    string `json:"address"`
+	PrivateKey string `json:"private_key"`
+}
+
+func generateRewardKey() (*rewardKeyFile, error) {
+	privKey, err := secp256k1.GeneratePrivateKey()
+	if err != nil {
+		return nil, err
+	}
+	uncompressed := privKey.PubKey().SerializeUncompressed()
+	h := sha3.NewLegacyKeccak256()
+	h.Write(uncompressed[1:])
+	hash := h.Sum(nil)
+	address := "0x" + hex.EncodeToString(hash[12:])
+	return &rewardKeyFile{
+		Address:    address,
+		PrivateKey: hex.EncodeToString(privKey.Serialize()),
+	}, nil
+}
+
+func resolveRewardAddr(home, addr string) string {
+	if addr != "" {
+		return addr
+	}
+	keyPath := filepath.Join(home, "reward-key.json")
+	if fileExists(keyPath) {
+		data, err := os.ReadFile(keyPath)
+		if err == nil {
+			var k rewardKeyFile
+			if json.Unmarshal(data, &k) == nil && k.Address != "" {
+				return k.Address
+			}
+		}
+	}
+	k, err := generateRewardKey()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[chakram] warning: could not generate EVM key: %v\n", err)
+		return "0x0000000000000000000000000000000000000000"
+	}
+	data, _ := json.MarshalIndent(k, "", "  ")
+	if err := os.WriteFile(keyPath, data, 0600); err != nil {
+		fmt.Fprintf(os.Stderr, "[chakram] warning: could not save reward key: %v\n", err)
+	} else {
+		fmt.Fprintf(os.Stderr, "[chakram] generated node EVM wallet: %s\n", k.Address)
+		fmt.Fprintf(os.Stderr, "[chakram] key saved to: %s\n", keyPath)
+	}
+	return k.Address
 }
