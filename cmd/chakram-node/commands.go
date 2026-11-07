@@ -2,12 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"golang.org/x/crypto/sha3"
 )
 
 // splitSeeds splits a comma-separated seed DNS list, trimming whitespace and
@@ -25,7 +31,8 @@ func splitSeeds(s string) []string {
 // ── start ──────────────────────────────────────────────────────────────────
 
 func cmdStart(args []string) {
-	networkURL, dataDir, rewardAddr, seedsDNS, noBrowser := startFlags(args)
+	networkURL, dataDir, rewardAddr, seedsDNS, noBrowser,
+		snapshotInterval, fastSyncHeight, fastSyncHash, stateSyncRPCServers := startFlags(args)
 
 	fmt.Printf("Chakram Node\n")
 	fmt.Printf("  Data dir : %s\n", dataDir)
@@ -75,8 +82,9 @@ func cmdStart(args []string) {
 	}
 
 	// ── 4. Chain setup ────────────────────────────────────────────────────
-	chainID    := resolveChainID(dataDir)
-	rewardAddr  = resolveRewardAddr(dataDir, rewardAddr)
+	chainID     := resolveChainID(dataDir)
+	rewardAddr   = resolveRewardAddr(dataDir, rewardAddr)
+	nodeKeyPath := filepath.Join(dataDir, "reward-key.json")
 
 	// ── 5. Start geth ────────────────────────────────────────────────────
 	fmt.Printf("\n==> Starting geth\n")
@@ -125,12 +133,22 @@ func cmdStart(args []string) {
 		cancel()
 	}()
 
+	gethBin := gethBinPath(filepath.Join(dataDir, "bin"))
 	if err := startConsensus(ctx, consensusCfg{
-		dataDir:         dataDir,
-		chainID:         chainID,
-		rewardAddr:      rewardAddr,
-		peers:           strings.Join(seeds.CometPeers, ","),
-		stakingContract: stakingContract,
+		dataDir:              dataDir,
+		chainID:              chainID,
+		rewardAddr:           rewardAddr,
+		peers:                strings.Join(seeds.CometPeers, ","),
+		stakingContract:      stakingContract,
+		nodeKeyPath:          nodeKeyPath,
+		gethBin:              gethBin,
+		snapshotInterval:     snapshotInterval,
+		fastSyncHeight:       fastSyncHeight,
+		fastSyncHash:         fastSyncHash,
+		stateSyncEnable:      stateSyncRPCServers != "" && fastSyncHash != "",
+		stateSyncRPCServers:  stateSyncRPCServers,
+		stateSyncTrustHeight: fastSyncHeight,
+		stateSyncTrustHash:   fastSyncHash,
 	}); err != nil {
 		gethProc.Process.Kill()
 		fatalf("consensus error: %v", err)
@@ -143,7 +161,7 @@ func cmdStart(args []string) {
 // ── status ─────────────────────────────────────────────────────────────────
 
 func cmdStatus(args []string) {
-	_, dataDir, _, _, _ := startFlags(args)
+	_, dataDir, _, _, _, _, _, _, _ := startFlags(args)
 
 	pid, err := readPID(dataDir)
 	if err != nil {
@@ -186,7 +204,7 @@ func cmdStatus(args []string) {
 // ── stop ───────────────────────────────────────────────────────────────────
 
 func cmdStop(args []string) {
-	_, dataDir, _, _, _ := startFlags(args)
+	_, dataDir, _, _, _, _, _, _, _ := startFlags(args)
 
 	pid, err := readPID(dataDir)
 	if err != nil {
@@ -210,6 +228,106 @@ func cmdStop(args []string) {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
+// ── snapshot ───────────────────────────────────────────────────────────────
+
+// cmdSnapshot downloads a snapshot from a seed node, imports it into geth,
+// and writes app_state.json so the next 'start' begins at the snapshot height.
+// Run this BEFORE 'chakram-node start' — geth must not be running.
+func cmdSnapshot(args []string) {
+	fs := flag.NewFlagSet("snapshot", flag.ExitOnError)
+	var fromURL, dataDir string
+	fs.StringVar(&fromURL, "from", "https://node.chakram.one", "seed node URL to download snapshot from")
+	fs.StringVar(&dataDir, "data-dir", defaultDataDir(), "data directory")
+	_ = fs.Parse(args)
+
+	fmt.Printf("Chakram snapshot download\n")
+	fmt.Printf("  Data dir : %s\n  From     : %s\n\n", dataDir, fromURL)
+
+	// Bootstrap first to ensure geth binary + genesis exist.
+	apiURLs := []string{fromURL}
+	if err := bootstrap(dataDir, apiURLs); err != nil {
+		fatalf("bootstrap: %v", err)
+	}
+
+	// Fetch snapshot metadata.
+	fmt.Printf("==> Fetching snapshot info...\n")
+	meta, err := fetchSnapshotMeta(fromURL)
+	if err != nil {
+		fatalf("snapshot meta: %v", err)
+	}
+	fmt.Printf("  Height : %d\n  Hash   : %s\n  Size   : %s\n",
+		meta.Height, meta.Hash, formatBytes(meta.SizeBytes))
+
+	// Download chain.rlp.
+	chainFile := filepath.Join(dataDir, "snapshot-import.rlp")
+	fmt.Printf("\n==> Downloading chain export (%s)...\n", formatBytes(meta.SizeBytes))
+	if err := downloadFile(fromURL+"/api/snapshot/latest/chain.rlp", chainFile); err != nil {
+		fatalf("download: %v", err)
+	}
+	fmt.Printf("  Downloaded.\n")
+
+	// Run geth import.
+	gethBin := gethBinPath(filepath.Join(dataDir, "bin"))
+	gethDataDir := filepath.Join(dataDir, "geth-data")
+	fmt.Printf("\n==> Importing into geth (this may take several minutes)...\n")
+	if err := runGethImportCmd(gethBin, gethDataDir, chainFile); err != nil {
+		os.Remove(chainFile)
+		fatalf("geth import: %v", err)
+	}
+	os.Remove(chainFile)
+	fmt.Printf("  Import complete.\n")
+
+	// Write app_state.json.
+	cometHome := filepath.Join(dataDir, "comet")
+	if err := applyFastSync(cometHome, int64(meta.Height), meta.Hash); err != nil {
+		fatalf("write app state: %v", err)
+	}
+
+	fmt.Printf("\n==> Done. Run 'chakram-node start' to continue syncing from height %d.\n", meta.Height)
+}
+
+type snapshotMetaHTTP struct {
+	Height    uint64 `json:"height"`
+	Hash      string `json:"hash"`
+	SizeBytes int64  `json:"size_bytes"`
+}
+
+func fetchSnapshotMeta(baseURL string) (*snapshotMetaHTTP, error) {
+	v, err := httpGetJSON(baseURL + "/api/snapshot/latest")
+	if err != nil {
+		return nil, err
+	}
+	body, _ := json.Marshal(v)
+	var m snapshotMetaHTTP
+	if err := json.Unmarshal(body, &m); err != nil {
+		return nil, err
+	}
+	if m.Height == 0 {
+		return nil, fmt.Errorf("no snapshot available on %s", baseURL)
+	}
+	return &m, nil
+}
+
+func runGethImportCmd(gethBin, gethDataDir, chainFile string) error {
+	cmd := exec.Command(gethBin, "--datadir", gethDataDir, "import", chainFile)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func formatBytes(b int64) string {
+	switch {
+	case b >= 1<<30:
+		return fmt.Sprintf("%.1f GB", float64(b)/float64(1<<30))
+	case b >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(b)/float64(1<<20))
+	case b >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(b)/float64(1<<10))
+	default:
+		return fmt.Sprintf("%d B", b)
+	}
+}
+
 func resolveChainID(dataDir string) string {
 	genesisPath := filepath.Join(dataDir, "comet", "config", "genesis.json")
 	data, err := os.ReadFile(genesisPath)
@@ -225,27 +343,56 @@ func resolveChainID(dataDir string) string {
 	return g.ChainID
 }
 
+type rewardKeyFile struct {
+	Address    string `json:"address"`
+	PrivateKey string `json:"private_key"`
+}
+
+// generateRewardKey creates a new secp256k1 keypair and returns the EVM address + hex private key.
+func generateRewardKey() (*rewardKeyFile, error) {
+	privKey, err := secp256k1.GeneratePrivateKey()
+	if err != nil {
+		return nil, err
+	}
+	uncompressed := privKey.PubKey().SerializeUncompressed() // 65 bytes: 0x04 + X + Y
+	h := sha3.NewLegacyKeccak256()
+	h.Write(uncompressed[1:])
+	hash := h.Sum(nil)
+	address := "0x" + hex.EncodeToString(hash[12:]) // last 20 bytes
+	return &rewardKeyFile{
+		Address:    address,
+		PrivateKey: hex.EncodeToString(privKey.Serialize()),
+	}, nil
+}
+
 func resolveRewardAddr(dataDir, addr string) string {
 	if addr != "" {
 		return addr
 	}
 
-	// Try to load from saved key.
 	keyPath := filepath.Join(dataDir, "reward-key.json")
 	if fileExists(keyPath) {
 		data, err := os.ReadFile(keyPath)
 		if err == nil {
-			var k struct {
-				Address string `json:"address"`
-			}
+			var k rewardKeyFile
 			if json.Unmarshal(data, &k) == nil && k.Address != "" {
 				return k.Address
 			}
 		}
 	}
 
-	// Generate a new one — just use zero address as placeholder.
-	// Real staking requires a funded address; for now the node syncs fine with zero.
-	return "0x0000000000000000000000000000000000000000"
+	k, err := generateRewardKey()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  Warning: could not generate EVM key: %v\n", err)
+		return "0x0000000000000000000000000000000000000000"
+	}
+	data, _ := json.MarshalIndent(k, "", "  ")
+	if err := os.WriteFile(keyPath, data, 0600); err != nil {
+		fmt.Fprintf(os.Stderr, "  Warning: could not save reward key: %v\n", err)
+	} else {
+		fmt.Printf("  Generated node EVM wallet : %s\n", k.Address)
+		fmt.Printf("  Key saved to              : %s\n", keyPath)
+	}
+	return k.Address
 }
 

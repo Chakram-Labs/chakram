@@ -150,3 +150,26 @@ type StakingResponse struct {
 	UnbondingPeriod uint64             `json:"unbonding_period,omitempty"`
 	Validators      []StakingValidator `json:"validators"`
 }
+
+// NodeWalletResponse is returned by GET /api/node-wallet.
+type NodeWalletResponse struct {
+	Address    string `json:"address"`
+	BalanceWei string `json:"balance_wei"`
+	HasKey     bool   `json:"has_key"`
+}
+
+// NodeWalletExportResponse is returned by GET /api/node-wallet/export-key (localhost only).
+type NodeWalletExportResponse struct {
+	PrivateKey string `json:"private_key"`
+}
+
+// StakingTxResponse is returned by POST /api/staking/{register,unbond,withdraw}.
+type StakingTxResponse struct {
+	TxHash string `json:"tx_hash"`
+}
+
+// StakingRegisterRequest is the body for POST /api/staking/register.
+type StakingRegisterRequest struct {
+	RewardAddress string `json:"reward_address"` // optional; defaults to node's EVM address
+	StakeWei      string `json:"stake_wei"`      // optional; defaults to minStake
+}

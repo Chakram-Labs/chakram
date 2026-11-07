@@ -1,29 +1,5 @@
 import { ethers } from 'ethers';
-import { GETH_RPC, CHAIN_ID, EXPLORER_URL } from '../api/client';
-
-declare global {
-  interface Window {
-    ethereum?: { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> };
-  }
-}
-
-type EthProvider = {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-  on: (event: string, cb: (...args: unknown[]) => void) => void;
-  removeListener: (event: string, cb: (...args: unknown[]) => void) => void;
-};
-
-export function getEthProvider(): EthProvider | undefined {
-  return window.ethereum as unknown as EthProvider | undefined;
-}
-
-export const CHAKRAM_CHAIN = {
-  chainId: '0x' + CHAIN_ID.toString(16),
-  chainName: 'Chakram',
-  nativeCurrency: { name: 'Chakram', symbol: 'CHK', decimals: 18 },
-  rpcUrls: [GETH_RPC],
-  blockExplorerUrls: [EXPLORER_URL],
-};
+import { GETH_RPC } from '../api/client';
 
 export const STAKING_ABI = [
   'function whitelist(address validator)',
@@ -45,38 +21,6 @@ export function getReadProvider(): ethers.JsonRpcProvider {
 
 export function getReadContract(contractAddr: string): ethers.Contract {
   return new ethers.Contract(contractAddr, STAKING_ABI, getReadProvider());
-}
-
-export async function ensureChakramNetwork(): Promise<void> {
-  const eth = getEthProvider();
-  if (!eth) throw new Error('No wallet detected. Install MetaMask.');
-  const chainId = await eth.request({ method: 'eth_chainId' }) as string;
-  if (parseInt(chainId, 16) === CHAIN_ID) return;
-  try {
-    await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAKRAM_CHAIN.chainId }] });
-  } catch (err) {
-    if ((err as { code?: number }).code === 4902) {
-      await eth.request({ method: 'wallet_addEthereumChain', params: [CHAKRAM_CHAIN] });
-    } else {
-      throw err;
-    }
-  }
-}
-
-export async function connectWallet(): Promise<string> {
-  const eth = getEthProvider();
-  if (!eth) throw new Error('No wallet detected. Install MetaMask.');
-  const accounts = await eth.request({ method: 'eth_requestAccounts' }) as string[];
-  await ensureChakramNetwork();
-  return accounts[0];
-}
-
-export async function getSignerContract(contractAddr: string): Promise<ethers.Contract> {
-  if (!window.ethereum) throw new Error('No wallet detected. Install MetaMask.');
-  await ensureChakramNetwork();
-  const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
-  const signer = await provider.getSigner();
-  return new ethers.Contract(contractAddr, STAKING_ABI, signer);
 }
 
 export function base64ToPubKeyHex(b64: string): string {

@@ -1,11 +1,14 @@
 import { useEffect, useState, FormEvent } from 'react';
-import { ethers } from 'ethers';
-import { api, StakingResponse, StakingValidator, trunc } from '../api/client';
+import { api, StakingResponse, StakingValidator, NodeWalletResponse, trunc } from '../api/client';
 import { GradCard, Card, Chip, StatCard } from '../components/ui';
-import { ShieldCheck, ShieldOff, Clock, Coins, Users, Copy, Check, Wallet } from 'lucide-react';
-import { connectWallet, getSignerContract, getEthProvider, base64ToPubKeyHex, weiToChkDisplay } from '../lib/staking';
+import { ShieldCheck, ShieldOff, Clock, Coins, Users, Copy, Check } from 'lucide-react';
+import { base64ToPubKeyHex, weiToChkDisplay } from '../lib/staking';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
+
+function weiToEth(wei: string): string {
+  try { return (Number(BigInt(wei)) / 1e18).toString(); } catch { return '0'; }
+}
 
 function secondsToHuman(s: number): string {
   if (s < 120) return `${s}s`;
@@ -27,9 +30,9 @@ function extractError(err: unknown): string {
 // ─── UI atoms ────────────────────────────────────────────────────────────────
 
 function StatusBadge({ v }: { v: StakingValidator }) {
-  if (v.jailed)                  return <Chip color="red"><ShieldOff size={9} strokeWidth={2.5} /> Jailed</Chip>;
+  if (v.jailed)                    return <Chip color="red"><ShieldOff size={9} strokeWidth={2.5} /> Jailed</Chip>;
   if (v.unbonding_unlock_time > 0) return <Chip color="amber"><Clock size={9} strokeWidth={2.5} /> Unbonding</Chip>;
-  if (v.active)                  return <Chip color="green"><ShieldCheck size={9} strokeWidth={2.5} /> Active</Chip>;
+  if (v.active)                    return <Chip color="green"><ShieldCheck size={9} strokeWidth={2.5} /> Active</Chip>;
   return <Chip color="gray">Inactive</Chip>;
 }
 
@@ -56,74 +59,67 @@ function InfoRow({ label, value, mono = false }: { label: string; value: string;
   );
 }
 
-type TxState = 'idle' | 'pending' | 'submitted' | 'confirmed' | 'error';
+type TxState = 'idle' | 'pending' | 'confirmed' | 'error';
 
 function TxResult({ state, hash, msg }: { state: TxState; hash?: string; msg?: string }) {
   if (state === 'idle')      return null;
-  if (state === 'pending')   return <p className="mt-2 text-xs text-lime-400 animate-pulse">Waiting for wallet…</p>;
-  if (state === 'submitted') return <p className="mt-2 text-xs text-lime-400 animate-pulse font-mono break-all">⟳ Submitted: {hash}</p>;
-  if (state === 'confirmed') return <p className="mt-2 text-xs text-lime-400 font-mono break-all">✓ Confirmed: {hash}</p>;
+  if (state === 'pending')   return <p className="mt-2 text-xs text-lime-400 animate-pulse">Sending…</p>;
+  if (state === 'confirmed') return <p className="mt-2 text-xs text-lime-400 font-mono break-all">⟳ Sent: {hash}</p>;
   return <p className="mt-2 text-xs text-red-400 break-all">{msg}</p>;
 }
 
 const iCls = 'w-full appearance-none rounded-lg border border-white/10 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-600 font-mono focus:outline-none focus:ring-2 focus:ring-lime-500/40';
-const btnLime   = 'inline-flex items-center gap-2 rounded-lg bg-lime-400 px-4 py-2 text-sm font-semibold text-gray-900 shadow-md shadow-lime-500/20 hover:bg-lime-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
-const btnAmber  = 'inline-flex items-center gap-2 rounded-lg bg-gradient-to-tr from-amber-500 to-amber-400 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/20 hover:shadow-amber-500/40 transition-shadow disabled:opacity-40 disabled:cursor-not-allowed';
-const btnRed    = 'inline-flex items-center gap-2 rounded-lg bg-gradient-to-tr from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-red-500/20 hover:shadow-red-500/40 transition-shadow disabled:opacity-40 disabled:cursor-not-allowed';
+const btnLime  = 'inline-flex items-center gap-2 rounded-lg bg-lime-400 px-4 py-2 text-sm font-semibold text-gray-900 shadow-md shadow-lime-500/20 hover:bg-lime-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+const btnAmber = 'inline-flex items-center gap-2 rounded-lg bg-gradient-to-tr from-amber-500 to-amber-400 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/20 hover:shadow-amber-500/40 transition-shadow disabled:opacity-40 disabled:cursor-not-allowed';
+const btnRed   = 'inline-flex items-center gap-2 rounded-lg bg-gradient-to-tr from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-red-500/20 hover:shadow-red-500/40 transition-shadow disabled:opacity-40 disabled:cursor-not-allowed';
 
-// ─── Wallet connect bar ───────────────────────────────────────────────────────
+// ─── Node wallet bar ──────────────────────────────────────────────────────────
 
-function WalletBar({ account, onConnect, loading, error }: {
-  account: string;
-  onConnect: () => void;
-  loading: boolean;
-  error: string;
-}) {
-  if (account) {
+function NodeWalletBar({ wallet }: { wallet: NodeWalletResponse | null }) {
+  if (!wallet) return null;
+  if (!wallet.has_key) {
     return (
-      <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-lime-500/20 bg-lime-500/5">
-        <span className="size-2 rounded-full bg-lime-400" />
-        <span className="text-xs font-mono text-lime-400">{account}</span>
-        <span className="text-[10px] text-gray-500 ml-auto">Connected</span>
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/20 bg-amber-500/5">
+        <span className="text-xs text-amber-400">Node EVM wallet not generated yet. Start chakram-node to create it automatically.</span>
       </div>
     );
   }
   return (
-    <div className="flex items-center gap-4 px-4 py-3 rounded-xl border border-white/8 bg-gray-900">
-      <span className="text-xs text-gray-400 flex-1">Connect your wallet to interact with the staking contract.</span>
-      <button onClick={onConnect} disabled={loading} className={btnLime}>
-        <Wallet size={14} />
-        {loading ? 'Connecting…' : 'Connect Wallet'}
-      </button>
-      {error && <p className="text-xs text-red-400">{error}</p>}
+    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-lime-500/20 bg-lime-500/5">
+      <span className="size-2 rounded-full bg-lime-400" />
+      <div className="flex flex-col">
+        <span className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">Node EVM Wallet</span>
+        <span className="text-xs font-mono text-lime-400">{wallet.address}</span>
+      </div>
+      <span className="text-xs text-gray-400 ml-auto">{weiToChkDisplay(wallet.balance_wei)}</span>
     </div>
   );
 }
 
 // ─── Validator panel ──────────────────────────────────────────────────────────
 
-function ValidatorPanel({ contractAddr, minStakeWei, validators, account, onRefresh }: {
+function ValidatorPanel({ contractAddr, minStakeWei, validators, nodeWallet, onRefresh }: {
   contractAddr?: string;
   minStakeWei?: string;
   validators: StakingValidator[];
-  account: string;
+  nodeWallet: NodeWalletResponse | null;
   onRefresh: () => void;
 }) {
-  const [pubKey,    setPubKey]    = useState('');
-  const [rewardAddr, setReward]   = useState('');
-  const [stakeAmt,  setStakeAmt]  = useState('');
+  const [rewardAddr, setReward]  = useState('');
+  const [stakeAmt,  setStakeAmt] = useState('');
+  const [pubKey,    setPubKey]   = useState('');
 
-  const [regState,  setRegState]  = useState<TxState>('idle');
-  const [regHash,   setRegHash]   = useState('');
-  const [regErr,    setRegErr]    = useState('');
+  const [regState, setRegState] = useState<TxState>('idle');
+  const [regHash,  setRegHash]  = useState('');
+  const [regErr,   setRegErr]   = useState('');
 
-  const [ubState,   setUbState]   = useState<TxState>('idle');
-  const [ubHash,    setUbHash]    = useState('');
-  const [ubErr,     setUbErr]     = useState('');
+  const [ubState,  setUbState]  = useState<TxState>('idle');
+  const [ubHash,   setUbHash]   = useState('');
+  const [ubErr,    setUbErr]    = useState('');
 
-  const [wdState,   setWdState]   = useState<TxState>('idle');
-  const [wdHash,    setWdHash]    = useState('');
-  const [wdErr,     setWdErr]     = useState('');
+  const [wdState,  setWdState]  = useState<TxState>('idle');
+  const [wdHash,   setWdHash]   = useState('');
+  const [wdErr,    setWdErr]    = useState('');
 
   useEffect(() => {
     api.validator().then(v => { if (v.pub_key) setPubKey(v.pub_key); }).catch(() => {});
@@ -131,16 +127,17 @@ function ValidatorPanel({ contractAddr, minStakeWei, validators, account, onRefr
 
   useEffect(() => {
     if (!stakeAmt && minStakeWei) {
-      try { setStakeAmt(ethers.formatEther(BigInt(minStakeWei))); } catch { /* ignore */ }
+      setStakeAmt(weiToEth(minStakeWei));
     }
   }, [minStakeWei]);
 
   useEffect(() => {
-    if (account && !rewardAddr) setReward(account);
-  }, [account]);
+    if (nodeWallet?.has_key && !rewardAddr) setReward(nodeWallet.address);
+  }, [nodeWallet]);
 
-  const myV = account
-    ? validators.find(v => v.evm_addr.toLowerCase() === account.toLowerCase())
+  const nodeAddress = nodeWallet?.has_key ? nodeWallet.address : '';
+  const myV = nodeAddress
+    ? validators.find(v => v.evm_addr.toLowerCase() === nodeAddress.toLowerCase())
     : undefined;
 
   const pubKeyHex  = base64ToPubKeyHex(pubKey);
@@ -148,55 +145,57 @@ function ValidatorPanel({ contractAddr, minStakeWei, validators, account, onRefr
   const canWithdraw = (myV?.unbonding_unlock_time ?? 0) > 0
     && (myV?.unbonding_unlock_time ?? 0) < Date.now() / 1000;
 
-  const busy = [regState, ubState, wdState].some(s => s === 'pending' || s === 'submitted');
+  const busy = [regState, ubState, wdState].some(s => s === 'pending');
 
   async function doRegister(e: FormEvent) {
     e.preventDefault();
-    if (!contractAddr || !account || !pubKeyHex) return;
+    if (!contractAddr || !nodeAddress) return;
     setRegState('pending'); setRegHash(''); setRegErr('');
     try {
-      const c = await getSignerContract(contractAddr);
-      const value = ethers.parseEther(stakeAmt.trim());
-      const tx = await c.register(pubKeyHex, rewardAddr.trim() || account, { value }) as { hash: string; wait: () => Promise<unknown> };
-      setRegState('submitted'); setRegHash(tx.hash);
-      await tx.wait();
-      setRegState('confirmed');
-      onRefresh();
+      // convert ETH → wei: split on decimal to avoid float precision loss
+      let stakeWei: string | undefined;
+      if (stakeAmt.trim()) {
+        const [whole, frac = ''] = stakeAmt.trim().split('.');
+        const fracPadded = frac.slice(0, 18).padEnd(18, '0');
+        stakeWei = (BigInt(whole) * BigInt('1000000000000000000') + BigInt(fracPadded)).toString();
+      }
+      const r = await api.stakingRegister(rewardAddr.trim() || undefined, stakeWei);
+      if ('error' in r) throw new Error(r.error);
+      setRegState('confirmed'); setRegHash(r.tx_hash);
+      setTimeout(onRefresh, 3000);
     } catch (err) { setRegState('error'); setRegErr(extractError(err)); }
   }
 
   async function doUnbond(e: FormEvent) {
     e.preventDefault();
-    if (!contractAddr || !account) return;
     setUbState('pending'); setUbHash(''); setUbErr('');
     try {
-      const c = await getSignerContract(contractAddr);
-      const tx = await c.startUnbonding() as { hash: string; wait: () => Promise<unknown> };
-      setUbState('submitted'); setUbHash(tx.hash);
-      await tx.wait();
-      setUbState('confirmed');
-      onRefresh();
+      const r = await api.stakingUnbond();
+      if ('error' in r) throw new Error(r.error);
+      setUbState('confirmed'); setUbHash(r.tx_hash);
+      setTimeout(onRefresh, 3000);
     } catch (err) { setUbState('error'); setUbErr(extractError(err)); }
   }
 
   async function doWithdraw(e: FormEvent) {
     e.preventDefault();
-    if (!contractAddr || !account) return;
     setWdState('pending'); setWdHash(''); setWdErr('');
     try {
-      const c = await getSignerContract(contractAddr);
-      const tx = await c.withdraw() as { hash: string; wait: () => Promise<unknown> };
-      setWdState('submitted'); setWdHash(tx.hash);
-      await tx.wait();
-      setWdState('confirmed');
-      onRefresh();
+      const r = await api.stakingWithdraw();
+      if ('error' in r) throw new Error(r.error);
+      setWdState('confirmed'); setWdHash(r.tx_hash);
+      setTimeout(onRefresh, 3000);
     } catch (err) { setWdState('error'); setWdErr(extractError(err)); }
   }
 
   return (
-    <Card title="Validator Panel" subtitle="Register your node as a validator — signed by your wallet">
+    <Card title="Validator Panel" subtitle="Register your node as a validator — signed by the node's own EVM wallet">
       <div className="px-6 py-5 space-y-5">
-        {!account && <p className="text-xs text-gray-500">Connect your wallet above first.</p>}
+        {!nodeAddress && (
+          <p className="text-xs text-gray-500">
+            Node EVM wallet not found. Start chakram-node to generate it automatically.
+          </p>
+        )}
 
         {myV && (
           <div className="rounded-lg bg-gray-900 border border-white/8 px-4 py-3">
@@ -214,9 +213,13 @@ function ValidatorPanel({ contractAddr, minStakeWei, validators, account, onRefr
           </div>
         )}
 
-        {!myV && (
+        {!myV && nodeAddress && (
           <div className="border-t border-white/5 pt-5">
-            <p className="text-xs font-semibold text-white mb-4">Register as Validator</p>
+            <p className="text-xs font-semibold text-white mb-1">Register as Validator</p>
+            <p className="text-[11px] text-gray-500 mb-4">
+              The chain owner must whitelist your EVM address first.
+              Run <code className="font-mono bg-gray-900 px-1 rounded">contracts/whitelist.py --address {nodeAddress}</code> on the owner's machine.
+            </p>
             <form onSubmit={doRegister} className="space-y-3">
               <div>
                 <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">Ed25519 Public Key (base64)</label>
@@ -229,14 +232,15 @@ function ValidatorPanel({ contractAddr, minStakeWei, validators, account, onRefr
               </div>
               <div>
                 <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">Reward Address</label>
-                <input value={rewardAddr} onChange={e => setReward(e.target.value)} placeholder={account || '0x reward address'} className={iCls} />
+                <input value={rewardAddr} onChange={e => setReward(e.target.value)} placeholder={nodeAddress || '0x reward address'} className={iCls} />
+                <p className="mt-1 text-[11px] text-gray-500">Defaults to node EVM wallet. Can be any address (e.g. a cold wallet).</p>
               </div>
               <div>
                 <label className="block text-[11px] font-bold uppercase text-gray-500 mb-1">Stake Amount (CHK)</label>
                 <input type="number" step="any" min="0" value={stakeAmt} onChange={e => setStakeAmt(e.target.value)} placeholder="1.0" className={iCls} />
                 <p className="mt-1 text-[11px] text-gray-500">Minimum: {weiToChkDisplay(minStakeWei ?? '0')}</p>
               </div>
-              <button type="submit" disabled={!account || !pubKeyHex || !stakeAmt || busy} className={btnLime}>
+              <button type="submit" disabled={!pubKeyHex || !stakeAmt || busy} className={btnLime}>
                 Register
               </button>
               <TxResult state={regState} hash={regHash} msg={regErr} />
@@ -284,11 +288,9 @@ function ValidatorPanel({ contractAddr, minStakeWei, validators, account, onRefr
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function Staking() {
-  const [data,    setData]    = useState<StakingResponse | null>(null);
-  const [err,     setErr]     = useState('');
-  const [account, setAccount] = useState('');
-  const [walletLoading, setWalletLoading] = useState(false);
-  const [walletError,   setWalletError]   = useState('');
+  const [data,       setData]       = useState<StakingResponse | null>(null);
+  const [nodeWallet, setNodeWallet] = useState<NodeWalletResponse | null>(null);
+  const [err,        setErr]        = useState('');
 
   async function load() {
     try { setData(await api.staking()); setErr(''); }
@@ -297,29 +299,10 @@ export default function Staking() {
 
   useEffect(() => {
     load();
+    api.nodeWallet().then(setNodeWallet).catch(() => {});
     const id = setInterval(load, 10_000);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    const eth = getEthProvider();
-    if (!eth) return;
-    const onAccounts = (accounts: unknown) => setAccount((accounts as string[])[0] ?? '');
-    const onChain = () => window.location.reload();
-    eth.on('accountsChanged', onAccounts);
-    eth.on('chainChanged', onChain);
-    return () => {
-      eth.removeListener('accountsChanged', onAccounts);
-      eth.removeListener('chainChanged', onChain);
-    };
-  }, []);
-
-  async function handleConnect() {
-    setWalletLoading(true); setWalletError('');
-    try { setAccount(await connectWallet()); }
-    catch (e: unknown) { setWalletError(extractError(e)); }
-    finally { setWalletLoading(false); }
-  }
 
   if (err && !data) return <p className="text-sm text-red-400">{err}</p>;
   if (!data) return (
@@ -414,12 +397,12 @@ export default function Staking() {
         </div>
       </div>
 
-      <WalletBar account={account} onConnect={handleConnect} loading={walletLoading} error={walletError} />
+      <NodeWalletBar wallet={nodeWallet} />
       <ValidatorPanel
         contractAddr={data.contract_addr}
         minStakeWei={data.min_stake}
         validators={data.validators}
-        account={account}
+        nodeWallet={nodeWallet}
         onRefresh={load}
       />
     </div>

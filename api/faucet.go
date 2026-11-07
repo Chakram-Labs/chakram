@@ -100,9 +100,13 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// buildSignedTx builds an EIP-155 signed raw transaction and returns its 0x-prefixed hex encoding.
-// chainID, nonce, and gasPrice are fetched by the caller via geth RPC.
+// buildSignedTx builds an EIP-155 signed ETH transfer and returns its 0x-prefixed hex encoding.
 func buildSignedTx(privKeyHex string, chainID, nonce uint64, gasPrice *big.Int, toHex string, value *big.Int) (string, error) {
+	return buildSignedTxFull(privKeyHex, chainID, nonce, gasPrice, toHex, value, nil, 21000)
+}
+
+// buildSignedTxFull builds an EIP-155 signed transaction with arbitrary calldata and gasLimit.
+func buildSignedTxFull(privKeyHex string, chainID, nonce uint64, gasPrice *big.Int, toHex string, value *big.Int, data []byte, gasLimit uint64) (string, error) {
 	privBytes, err := hex.DecodeString(strings.TrimPrefix(privKeyHex, "0x"))
 	if err != nil || len(privBytes) != 32 {
 		return "", fmt.Errorf("invalid private key")
@@ -118,13 +122,13 @@ func buildSignedTx(privKeyHex string, chainID, nonce uint64, gasPrice *big.Int, 
 	preSign := rlpList([][]byte{
 		rlpUint64(nonce),
 		rlpBigInt(gasPrice),
-		rlpUint64(21000),
+		rlpUint64(gasLimit),
 		rlpFixedBytes(toBytes),
 		rlpBigInt(value),
-		rlpBytes(nil), // data: empty
+		rlpBytes(data),
 		rlpUint64(chainID),
-		rlpBytes(nil), // r placeholder
-		rlpBytes(nil), // s placeholder
+		rlpBytes(nil),
+		rlpBytes(nil),
 	})
 	hash := keccak256Hash(preSign)
 
@@ -135,14 +139,13 @@ func buildSignedTx(privKeyHex string, chainID, nonce uint64, gasPrice *big.Int, 
 	s := new(big.Int).SetBytes(sig[33:65])
 	v := new(big.Int).SetUint64(recid + chainID*2 + 35)
 
-	// Signed tx: rlp([nonce, gasPrice, gasLimit, to, value, data, v, r, s])
 	signed := rlpList([][]byte{
 		rlpUint64(nonce),
 		rlpBigInt(gasPrice),
-		rlpUint64(21000),
+		rlpUint64(gasLimit),
 		rlpFixedBytes(toBytes),
 		rlpBigInt(value),
-		rlpBytes(nil),
+		rlpBytes(data),
 		rlpBigInt(v),
 		rlpBigInt(r),
 		rlpBigInt(s),

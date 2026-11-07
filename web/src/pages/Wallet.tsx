@@ -1,7 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, AddressResponse, FaucetResponse } from '../api/client';
-import { Search, Droplets, Copy, Check } from 'lucide-react';
+import { api, AddressResponse, FaucetResponse, NodeWalletResponse } from '../api/client';
+import { Search, Droplets, Copy, Check, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { Card, Chip } from '../components/ui';
 
 function weiToEth(wei: string): string {
@@ -31,13 +31,119 @@ function inputCls() {
   return 'flex-1 appearance-none rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-500 font-mono focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 dark:focus:ring-indigo-400';
 }
 
+// ─── Node Wallet section ──────────────────────────────────────────────────────
+
+function NodeWalletSection() {
+  const [wallet,   setWallet]   = useState<NodeWalletResponse | null>(null);
+  const [privKey,  setPrivKey]  = useState('');
+  const [showKey,  setShowKey]  = useState(false);
+  const [keyErr,   setKeyErr]   = useState('');
+  const [keyLoading, setKeyLoading] = useState(false);
+
+  useEffect(() => {
+    api.nodeWallet().then(setWallet).catch(() => setWallet({ address: '', balance_wei: '0', has_key: false }));
+  }, []);
+
+  async function handleShowKey() {
+    if (privKey) { setShowKey(v => !v); return; }
+    setKeyLoading(true); setKeyErr('');
+    try {
+      const r = await api.nodeWalletExportKey();
+      if ('error' in r) throw new Error((r as { error: string }).error);
+      setPrivKey(r.private_key);
+      setShowKey(true);
+    } catch (err) {
+      setKeyErr(err instanceof Error ? err.message : String(err));
+    } finally { setKeyLoading(false); }
+  }
+
+  if (!wallet) return null;
+
+  if (!wallet.has_key) {
+    return (
+      <Card title="Node EVM Wallet" subtitle="Your node's auto-generated Ethereum wallet">
+        <div className="px-6 py-5">
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+            <p className="text-sm text-amber-400">No wallet found. Start chakram-node to generate it automatically.</p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="Node EVM Wallet" subtitle="This node's auto-generated Ethereum wallet — used for staking and block rewards">
+      <div className="px-6 py-5 space-y-4">
+        {/* Address + balance */}
+        <div className="rounded-xl overflow-hidden border border-slate-100 dark:border-gray-700">
+          <table className="w-full table-auto">
+            <tbody>
+              <tr>
+                <td className="py-3 px-4 w-28 border-b border-slate-50 dark:border-gray-700">
+                  <span className="text-[11px] font-bold uppercase text-slate-400 dark:text-gray-500">Address</span>
+                </td>
+                <td className="py-3 px-4 border-b border-slate-50 dark:border-gray-700">
+                  <span className="font-mono text-xs text-slate-700 dark:text-white break-all">{wallet.address}</span>
+                  <CopyButton text={wallet.address} />
+                </td>
+              </tr>
+              <tr>
+                <td className="py-3 px-4 w-28">
+                  <span className="text-[11px] font-bold uppercase text-slate-400 dark:text-gray-500">Balance</span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-white">{weiToEth(wallet.balance_wei)}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Export key */}
+        <div>
+          <button
+            onClick={handleShowKey}
+            disabled={keyLoading}
+            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-gray-900 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-800 transition-colors disabled:opacity-50"
+          >
+            {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+            {keyLoading ? 'Loading…' : showKey ? 'Hide Private Key' : 'Show Private Key'}
+          </button>
+          {keyErr && <p className="mt-2 text-xs text-red-400">{keyErr}</p>}
+          {showKey && privKey && (
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                <p className="text-[11px] text-amber-400">
+                  Never share this key. Import into MetaMask to send CHK or manage your validator from an external wallet.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-gray-900 border border-white/10 px-3 py-2">
+                <code className="flex-1 font-mono text-xs text-lime-400 break-all">{privKey}</code>
+                <CopyButton text={privKey} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <p className="text-[11px] text-gray-500">
+          The chain owner must whitelist this address before you can register as a validator.
+          Use <code className="font-mono bg-gray-900 px-1 rounded">contracts/whitelist.py --address {wallet.address}</code> on the owner's machine.
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function Wallet() {
   const [params] = useSearchParams();
-  const [addr, setAddr] = useState(params.get('addr') || '');
+  const [addr, setAddr]   = useState(params.get('addr') || '');
   const [input, setInput] = useState(params.get('addr') || '');
-  const [data, setData] = useState<AddressResponse | null>(null);
-  const [addrErr, setAddrErr] = useState('');
-  const [devMode, setDevMode] = useState<boolean | null>(null);
+  const [data, setData]   = useState<AddressResponse | null>(null);
+  const [addrErr, setAddrErr]       = useState('');
+  const [devMode, setDevMode]       = useState<boolean | null>(null);
   const [faucetAddr, setFaucetAddr] = useState('');
   const [faucetResult, setFaucetResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [faucetLoading, setFaucetLoading] = useState(false);
@@ -69,6 +175,9 @@ export default function Wallet() {
 
   return (
     <div className="space-y-6">
+
+      {/* Node EVM Wallet */}
+      <NodeWalletSection />
 
       {/* Address lookup */}
       <Card title="Address Lookup" subtitle="Query balance, nonce, and contract status for any address">

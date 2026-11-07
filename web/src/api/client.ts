@@ -35,6 +35,14 @@ export interface StakingResponse {
   min_stake?: string; unbonding_period?: number; validators: StakingValidator[];
 }
 
+export interface NodeWalletResponse {
+  address: string; balance_wei: string; has_key: boolean;
+}
+
+export interface NodeWalletExportResponse { private_key: string; }
+
+export interface StakingTxResponse { tx_hash: string; }
+
 export const CHAIN_ID = 11640;
 
 // When served from localhost (a self-hosted chakram-node), point directly at
@@ -78,6 +86,18 @@ export const api = {
       body: JSON.stringify({ address }),
     }).then(r => r.json() as Promise<FaucetResponse | { error: string }>),
   logsUrl: () => getBase() + '/api/logs',
+  nodeWallet: () => get<NodeWalletResponse>('/api/node-wallet'),
+  nodeWalletExportKey: () => get<NodeWalletExportResponse>('/api/node-wallet/export-key'),
+  stakingRegister: (rewardAddress?: string, stakeWei?: string) =>
+    fetch('/api/staking/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reward_address: rewardAddress || undefined, stake_wei: stakeWei || undefined }),
+    }).then(r => r.json() as Promise<StakingTxResponse | { error: string }>),
+  stakingUnbond: () =>
+    fetch('/api/staking/unbond', { method: 'POST' }).then(r => r.json() as Promise<StakingTxResponse | { error: string }>),
+  stakingWithdraw: () =>
+    fetch('/api/staking/withdraw', { method: 'POST' }).then(r => r.json() as Promise<StakingTxResponse | { error: string }>),
 };
 
 export function trunc(s: string, n = 12): string {

@@ -12,9 +12,10 @@ const (
 
 // seedList holds peer addresses discovered via DNS.
 type seedList struct {
-	CometPeers []string // nodeID@host:26656
-	GethEnodes []string // enode://pubkey@host:30303
-	APIURLs    []string // https://host  (for genesis + node-info)
+	CometPeers  []string // nodeID@host:26656
+	GethEnodes  []string // enode://pubkey@host:30303
+	APIURLs     []string // https://host  (for genesis + node-info)
+	SnapTrusted string   // "height:0xhash" from snap= field (first seen wins)
 }
 
 // resolveSeedsDNS queries one or more DNS seed names and returns all
@@ -23,6 +24,7 @@ type seedList struct {
 //	comet=nodeID@host:26656
 //	geth=enode://pubkey@host:30303
 //	api=https://host
+//	snap=HEIGHT:0xHASH  (trusted snapshot: height and EVM block hash)
 //	link=other.seeds.example.com   (followed recursively, max 3 hops)
 //
 // link= lets any organisation publish their own seed list under their own
@@ -58,6 +60,10 @@ func resolveSeedsDNS(names []string) seedList {
 					result.GethEnodes = appendUniq(result.GethEnodes, v)
 				case "api":
 					result.APIURLs = appendUniq(result.APIURLs, v)
+				case "snap":
+					if result.SnapTrusted == "" {
+						result.SnapTrusted = v // "height:0xhash"
+					}
 				case "link":
 					walk(v, depth+1)
 				}

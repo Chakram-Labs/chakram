@@ -34,6 +34,8 @@ func main() {
 		cmdStatus(args)
 	case "stop":
 		cmdStop(args)
+	case "snapshot":
+		cmdSnapshot(args)
 	case "version", "--version", "-v":
 		fmt.Printf("chakram-node %s\n", version.Version)
 	case "help", "--help", "-h":
@@ -81,13 +83,22 @@ func fatalf(format string, args ...any) {
 	os.Exit(1)
 }
 
-func startFlags(args []string) (network, dataDir, reward, seeds string, noBrowser bool) {
+func startFlags(args []string) (
+	network, dataDir, reward, seeds string,
+	noBrowser bool,
+	snapshotInterval, fastSyncHeight int64,
+	fastSyncHash, stateSyncRPCServers string,
+) {
 	fs := flag.NewFlagSet("start", flag.ExitOnError)
 	fs.StringVar(&network, "network", "https://node.chakram.one", "fallback bootstrap URL")
 	fs.StringVar(&seeds, "seeds", defaultSeedsDNS, "comma-separated DNS seed names")
 	fs.StringVar(&dataDir, "data-dir", defaultDataDir(), "data directory")
 	fs.StringVar(&reward, "reward", "", "EVM address for block rewards (auto-generated if empty)")
 	fs.BoolVar(&noBrowser, "no-browser", false, "don't open browser on startup")
+	fs.Int64Var(&snapshotInterval, "snapshot-interval", 0, "blocks between snapshots (0 = disabled)")
+	fs.Int64Var(&fastSyncHeight, "trusted-height", 0, "snapshot height to fast-sync from (requires --trusted-hash and pre-imported geth data)")
+	fs.StringVar(&fastSyncHash, "trusted-hash", "", "EVM block hash at --trusted-height (0x-prefixed)")
+	fs.StringVar(&stateSyncRPCServers, "rpc-servers", "", "comma-separated CometBFT RPC URLs for state-sync hash verification")
 	_ = fs.Parse(args)
 	return
 }

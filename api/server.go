@@ -50,6 +50,8 @@ type Config struct {
 	HomeDir string
 	// P2PHost is the publicly reachable hostname/IP for P2P connections.
 	P2PHost string
+	// NodeKeyPath is the path to the node's EVM reward key file (reward-key.json).
+	NodeKeyPath string
 }
 
 // Server is the Node API HTTP server.
@@ -93,6 +95,14 @@ func New(cfg Config, log *slog.Logger) *Server {
 	mux.Handle("/api/staking", s.apiRoute("/api/staking", s.handleStaking))
 	mux.Handle("/api/genesis", s.apiRoute("/api/genesis", s.handleGenesis))
 	mux.Handle("/api/node-info", s.apiRoute("/api/node-info", s.handleNodeInfo))
+	mux.Handle("/api/node-wallet", s.apiRoute("/api/node-wallet", s.handleNodeWallet))
+	mux.Handle("/api/node-wallet/export-key", s.apiRoute("/api/node-wallet/export-key", s.handleNodeWalletExportKey))
+	mux.Handle("/api/staking/register", s.apiRoute("/api/staking/register", s.handleStakingRegister))
+	mux.Handle("/api/staking/unbond", s.apiRoute("/api/staking/unbond", s.handleStakingUnbond))
+	mux.Handle("/api/staking/withdraw", s.apiRoute("/api/staking/withdraw", s.handleStakingWithdraw))
+	mux.Handle("/api/snapshot/latest", s.apiRoute("/api/snapshot/latest", s.handleSnapshotLatest))
+	// chain.rlp download is large — bypass the burst rate limiter, use direct instrumentation.
+	mux.Handle("/api/snapshot/latest/chain.rlp", s.instrument("/api/snapshot/latest/chain.rlp", http.HandlerFunc(s.handleSnapshotChainRLP)))
 
 	if cfg.DevMode {
 		mux.Handle("/api/faucet", s.instrument("/api/faucet", http.HandlerFunc(s.handleFaucet)))

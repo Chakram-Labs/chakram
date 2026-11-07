@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, ValidatorResponse } from '../api/client';
-import { ShieldCheck, ShieldOff, Zap, Coins } from 'lucide-react';
+import { ShieldCheck, ShieldOff, Zap, Coins, Key, Wallet } from 'lucide-react';
 import { StatCard, Card, Chip } from '../components/ui';
 
 function SignBar({ signed, missed }: { signed: number; missed: number }) {
@@ -30,9 +31,39 @@ function SignBar({ signed, missed }: { signed: number; missed: number }) {
   );
 }
 
+function InfoRow({ label, value, mono = false, sublabel }: {
+  label: string; value: string; mono?: boolean; sublabel?: string;
+}) {
+  return (
+    <tr>
+      <td className="py-3 px-5 w-48 shrink-0 align-top border-b border-slate-50 dark:border-gray-700 last:border-0">
+        <span className="text-[11px] font-bold uppercase text-slate-400 dark:text-gray-500">{label}</span>
+        {sublabel && <p className="text-[10px] text-slate-300 dark:text-gray-600 mt-0.5 normal-case font-normal">{sublabel}</p>}
+      </td>
+      <td className="py-3 px-5 border-b border-slate-50 dark:border-gray-700 last:border-0">
+        <span className={`text-sm text-slate-700 dark:text-white break-all ${mono ? 'font-mono text-xs' : 'font-medium'}`}>
+          {value || '—'}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function SectionHeader({ icon: Icon, title, subtitle }: { icon: React.ElementType; title: string; subtitle: string }) {
+  return (
+    <div className="bg-gradient-to-tr from-gray-900 to-gray-800 px-6 py-4 flex items-center gap-3">
+      <Icon size={16} className="text-gray-400 shrink-0" />
+      <div>
+        <h6 className="text-sm font-semibold text-white">{title}</h6>
+        <p className="text-[11px] text-gray-500">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Validator() {
   const [data, setData] = useState<ValidatorResponse | null>(null);
-  const [err, setErr] = useState('');
+  const [err, setErr]   = useState('');
 
   async function load() {
     try { setData(await api.validator()); setErr(''); }
@@ -53,12 +84,14 @@ export default function Validator() {
     ? (Number(BigInt(data.reward_balance)) / 1e18).toFixed(4) + ' CHK'
     : '0 CHK';
 
+  const hasEVMWallet = data.reward_address &&
+    data.reward_address !== '0x0000000000000000000000000000000000000000';
+
   return (
-    <div className="mt-12">
+    <div className="mt-12 space-y-6">
 
       {/* Stat cards */}
-      <div className="mb-12 grid gap-y-10 gap-x-6 md:grid-cols-2 xl:grid-cols-3">
-
+      <div className="mb-6 grid gap-y-10 gap-x-6 md:grid-cols-2 xl:grid-cols-3">
         <StatCard
           color={data.is_active ? 'green' : 'red'}
           icon={data.is_active ? ShieldCheck : ShieldOff}
@@ -70,70 +103,117 @@ export default function Validator() {
             </Chip>
           }
         />
-
         <StatCard
           color="purple"
           icon={Zap}
           title="Voting Power"
           value={data.voting_power.toLocaleString()}
-          footer={<span className="text-[11px] text-slate-500 dark:text-gray-400">consensus weight</span>}
+          footer={<span className="text-[11px] text-slate-500 dark:text-gray-400">0 = not registered yet</span>}
         />
-
         {data.reward_balance !== undefined && (
           <StatCard
             color="teal"
             icon={Coins}
-            title="Reward Balance"
+            title="EVM Wallet Balance"
             value={reward}
             footer={
-              data.reward_address
+              hasEVMWallet
                 ? <span className="font-mono text-[11px] text-slate-500 dark:text-gray-400 truncate block">
-                    {data.reward_address.slice(0, 16)}…
+                    {data.reward_address!.slice(0, 20)}…
                   </span>
-                : undefined
+                : <span className="text-[11px] text-amber-400">No wallet generated yet</span>
             }
           />
         )}
       </div>
 
       {/* Signing rate */}
-      <div className="mb-6">
-        <Card title="Signing Rate — Last 100 Blocks">
-          <div className="px-6 py-5">
-            <SignBar signed={data.signed_last_100} missed={data.missed_last_100} />
-          </div>
-        </Card>
-      </div>
-
-      {/* Validator details table card */}
-      <div className="rounded-xl overflow-hidden border border-slate-100 dark:border-gray-700 shadow-sm">
-        <div className="bg-gradient-to-tr from-gray-900 to-gray-800 px-6 py-5">
-          <h6 className="text-sm font-semibold text-white">Validator Details</h6>
+      <Card title="Signing Rate — Last 100 Blocks">
+        <div className="px-6 py-5">
+          <SignBar signed={data.signed_last_100} missed={data.missed_last_100} />
         </div>
-        <div className="bg-white dark:bg-gray-800 overflow-x-auto px-0 pt-0 pb-2">
+      </Card>
+
+      {/* CometBFT Identity */}
+      <div className="rounded-xl overflow-hidden border border-slate-100 dark:border-gray-700 shadow-sm">
+        <SectionHeader
+          icon={Key}
+          title="CometBFT Consensus Identity"
+          subtitle="Used for block signing — not an EVM address"
+        />
+        <div className="bg-white dark:bg-gray-800 overflow-x-auto">
           <table className="w-full table-auto">
             <tbody>
-              {([
-                ['Address',      data.address,              true],
-                ['Public Key',   data.pub_key,              true],
-                ['Voting Power', String(data.voting_power), false],
-                ...(data.reward_address ? [['Reward Address', data.reward_address, true] as [string, string, boolean]] : []),
-              ] as [string, string, boolean][]).map(([label, value, mono], i, arr) => (
-                <tr key={label}>
-                  <td className={`py-3 px-5 w-40 shrink-0 ${i < arr.length - 1 ? 'border-b border-slate-50 dark:border-gray-700' : ''}`}>
-                    <span className="text-[11px] font-bold uppercase text-slate-400 dark:text-gray-500">{label}</span>
-                  </td>
-                  <td className={`py-3 px-5 ${i < arr.length - 1 ? 'border-b border-slate-50 dark:border-gray-700' : ''}`}>
-                    <span className={`text-sm text-slate-700 dark:text-white break-all ${mono ? 'font-mono text-xs' : 'font-medium'}`}>
-                      {value}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              <InfoRow
+                label="CometBFT Address"
+                value={data.address}
+                mono
+                sublabel="For block signing only"
+              />
+              <InfoRow
+                label="Ed25519 Public Key"
+                value={data.pub_key}
+                mono
+                sublabel="Submitted to staking contract on register()"
+              />
+              <InfoRow
+                label="Voting Power"
+                value={String(data.voting_power)}
+                sublabel="Becomes non-zero after registration"
+              />
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* EVM Wallet */}
+      <div className="rounded-xl overflow-hidden border border-slate-100 dark:border-gray-700 shadow-sm">
+        <SectionHeader
+          icon={Wallet}
+          title="Node EVM Wallet"
+          subtitle="Ethereum-compatible address — used for staking and rewards"
+        />
+        <div className="bg-white dark:bg-gray-800 overflow-x-auto">
+          <table className="w-full table-auto">
+            <tbody>
+              {hasEVMWallet ? (
+                <>
+                  <InfoRow
+                    label="EVM Address"
+                    value={data.reward_address!}
+                    mono
+                    sublabel="Must be whitelisted by chain owner before registration"
+                  />
+                  <InfoRow
+                    label="CHK Balance"
+                    value={reward}
+                    sublabel="Must have ≥ minStake to register"
+                  />
+                </>
+              ) : (
+                <tr>
+                  <td colSpan={2} className="px-5 py-4">
+                    <p className="text-sm text-amber-400">
+                      No EVM wallet found. Start chakram-node — it generates one automatically on first run.
+                    </p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {hasEVMWallet && (
+          <div className="bg-white dark:bg-gray-800 px-5 py-3 border-t border-slate-50 dark:border-gray-700">
+            <Link
+              to="/wallet"
+              className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline"
+            >
+              Export private key → Wallet page
+            </Link>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }

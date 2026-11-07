@@ -32,10 +32,16 @@ type EngineClient interface {
 
 // Config holds per-node configuration for ChakramApp.
 type Config struct {
-	Home                 string // CometBFT home directory (app_state.json lives here)
-	RewardAddress        string // 0x-prefixed EVM address for withdrawal rewards
-	GethRPCURL           string // geth plain HTTP RPC URL (e.g. http://127.0.0.1:8545)
-	StakingContractAddr  string // 0x-prefixed address of StakingRegistry.sol; empty = PoA mode
+	Home                string // CometBFT home directory (app_state.json lives here)
+	RewardAddress       string // 0x-prefixed EVM address for withdrawal rewards
+	GethRPCURL          string // geth plain HTTP RPC URL (e.g. http://127.0.0.1:8545)
+	StakingContractAddr string // 0x-prefixed address of StakingRegistry.sol; empty = PoA mode
+
+	// Snapshot support (optional — leave empty to disable).
+	GethDataDir      string // path to geth --datadir (for geth export/import)
+	GethBin          string // path to geth binary
+	SnapshotInterval int64  // blocks between snapshots; 0 = disabled (default)
+	SnapshotRetain   int    // number of snapshots to keep; 0 = default (3)
 }
 
 // pendingBlock caches the execution block data for the current height while
@@ -59,9 +65,10 @@ type prebuiltPayload struct {
 type ChakramApp struct {
 	abcitypes.BaseApplication
 
-	engine EngineClient
-	cfg    Config
-	log    *slog.Logger
+	engine    EngineClient
+	cfg       Config
+	log       *slog.Logger
+	snapshots *SnapshotManager // nil if snapshots not configured
 
 	mu       sync.Mutex
 	state    *AppState
@@ -81,12 +88,21 @@ func NewChakramApp(eng EngineClient, cfg Config, log *slog.Logger) (*ChakramApp,
 	if state.ValidatorRewardAddrs == nil {
 		state.ValidatorRewardAddrs = make(map[string]string)
 	}
+	var snapMgr *SnapshotManager
+	if cfg.GethBin != "" && cfg.GethDataDir != "" && cfg.SnapshotInterval > 0 {
+		snapMgr = newSnapshotManager(cfg.Home, cfg.GethDataDir, cfg.GethBin, cfg.SnapshotInterval, cfg.SnapshotRetain)
+	} else {
+		// Consumer-only: no production, but still handle OfferSnapshot/ApplySnapshotChunk.
+		snapMgr = newSnapshotManager(cfg.Home, cfg.GethDataDir, cfg.GethBin, 0, cfg.SnapshotRetain)
+	}
+
 	return &ChakramApp{
-		engine:  eng,
-		cfg:     cfg,
-		log:     log,
-		state:   state,
-		pending: make(map[int64]*pendingBlock),
+		engine:    eng,
+		cfg:       cfg,
+		log:       log,
+		snapshots: snapMgr,
+		state:     state,
+		pending:   make(map[int64]*pendingBlock),
 	}, nil
 }
 
@@ -602,7 +618,42 @@ func (app *ChakramApp) Commit(_ context.Context, _ *abcitypes.RequestCommit) (*a
 	// PrepareProposal has a ready payloadID when it runs ~2s from now.
 	go app.preBuildPayload(nextHeight, lastExecHash, lastPayloadTime)
 
+	// Trigger snapshot creation if this height is a snapshot point.
+	if app.snapshots != nil {
+		app.snapshots.MaybeSnapshot(nextHeight-1, lastExecHash)
+	}
+
 	return &abcitypes.ResponseCommit{RetainHeight: 0}, nil
+}
+
+// ── ABCI Snapshot methods ─────────────────────────────────────────────────────
+
+func (app *ChakramApp) ListSnapshots(ctx context.Context, req *abcitypes.RequestListSnapshots) (*abcitypes.ResponseListSnapshots, error) {
+	if app.snapshots == nil {
+		return &abcitypes.ResponseListSnapshots{}, nil
+	}
+	return app.snapshots.ListSnapshots(ctx, req)
+}
+
+func (app *ChakramApp) LoadSnapshotChunk(ctx context.Context, req *abcitypes.RequestLoadSnapshotChunk) (*abcitypes.ResponseLoadSnapshotChunk, error) {
+	if app.snapshots == nil {
+		return &abcitypes.ResponseLoadSnapshotChunk{}, nil
+	}
+	return app.snapshots.LoadSnapshotChunk(ctx, req)
+}
+
+func (app *ChakramApp) OfferSnapshot(ctx context.Context, req *abcitypes.RequestOfferSnapshot) (*abcitypes.ResponseOfferSnapshot, error) {
+	if app.snapshots == nil {
+		return &abcitypes.ResponseOfferSnapshot{Result: abcitypes.ResponseOfferSnapshot_REJECT}, nil
+	}
+	return app.snapshots.OfferSnapshot(ctx, req)
+}
+
+func (app *ChakramApp) ApplySnapshotChunk(ctx context.Context, req *abcitypes.RequestApplySnapshotChunk) (*abcitypes.ResponseApplySnapshotChunk, error) {
+	if app.snapshots == nil {
+		return &abcitypes.ResponseApplySnapshotChunk{Result: abcitypes.ResponseApplySnapshotChunk_ABORT}, nil
+	}
+	return app.snapshots.ApplySnapshotChunk(ctx, req)
 }
 
 // preBuildPayload calls FCU with payload attributes for the next height
