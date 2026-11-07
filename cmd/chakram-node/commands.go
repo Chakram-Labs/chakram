@@ -32,56 +32,66 @@ func splitSeeds(s string) []string {
 
 func cmdStart(args []string) {
 	networkURL, dataDir, rewardAddr, seedsDNS, stakingContractFlag, p2pHostFlag, noBrowser,
-		snapshotInterval, fastSyncHeight, fastSyncHash, stateSyncRPCServers := startFlags(args)
+		snapshotInterval, fastSyncHeight, fastSyncHash, stateSyncRPCServers, genesisNode := startFlags(args)
 
 	fmt.Printf("Chakram Node\n")
 	fmt.Printf("  Data dir : %s\n", dataDir)
 	fmt.Printf("\n")
 
-	// ── 1. Peer discovery via DNS ──────────────────────────────────────────
-	fmt.Printf("==> Peer Discovery\n")
-	dnsNames := splitSeeds(seedsDNS)
-	seeds := resolveSeedsDNS(dnsNames)
+	var seeds seedList
+	var stakingContract string
 
-	// Always include the fallback network URL as an API source.
-	if networkURL != "" {
-		seeds.APIURLs = appendUniq(seeds.APIURLs, networkURL)
-	}
-
-	if len(seeds.CometPeers) > 0 || len(seeds.GethEnodes) > 0 {
-		fmt.Printf("  DNS resolved  : %d comet peer(s), %d geth enode(s), %d API endpoint(s)\n",
-			len(seeds.CometPeers), len(seeds.GethEnodes), len(seeds.APIURLs))
-	} else {
-		fmt.Printf("  DNS lookup returned no peers — will try fallback URL\n")
-	}
-
-	// ── 2. Bootstrap ──────────────────────────────────────────────────────
-	fmt.Printf("\n==> Bootstrap\n")
-	if err := bootstrap(dataDir, seeds.APIURLs); err != nil {
-		fatalf("bootstrap failed: %v", err)
-	}
-
-	// ── 3. Enrich peer list from live API endpoints ────────────────────────
-	// fetchNetworkInfo adds each API node's own comet peer + geth enode to
-	// seeds (in case DNS didn't have them yet) and returns staking contract.
-	fmt.Printf("  Querying network info...\n")
-	stakingContract := fetchNetworkInfo(seeds.APIURLs, &seeds)
-	if stakingContractFlag != "" {
+	if genesisNode {
+		// Genesis node: create own genesis without fetching from network.
+		fmt.Printf("==> Genesis Node Bootstrap\n")
+		if err := bootstrapGenesisNode(dataDir); err != nil {
+			fatalf("genesis bootstrap failed: %v", err)
+		}
 		stakingContract = stakingContractFlag
-	}
+	} else {
+		// ── 1. Peer discovery via DNS ──────────────────────────────────────────
+		fmt.Printf("==> Peer Discovery\n")
+		dnsNames := splitSeeds(seedsDNS)
+		seeds = resolveSeedsDNS(dnsNames)
 
-	if len(seeds.CometPeers) > 0 {
-		for _, p := range seeds.CometPeers {
-			fmt.Printf("  CometBFT peer    : %s\n", p)
+		// Always include the fallback network URL as an API source.
+		if networkURL != "" {
+			seeds.APIURLs = appendUniq(seeds.APIURLs, networkURL)
 		}
-	}
-	if len(seeds.GethEnodes) > 0 {
-		for _, e := range seeds.GethEnodes {
-			fmt.Printf("  Geth bootnode    : %s\n", e)
+
+		if len(seeds.CometPeers) > 0 || len(seeds.GethEnodes) > 0 {
+			fmt.Printf("  DNS resolved  : %d comet peer(s), %d geth enode(s), %d API endpoint(s)\n",
+				len(seeds.CometPeers), len(seeds.GethEnodes), len(seeds.APIURLs))
+		} else {
+			fmt.Printf("  DNS lookup returned no peers — will try fallback URL\n")
 		}
-	}
-	if stakingContract != "" {
-		fmt.Printf("  Staking contract : %s\n", stakingContract)
+
+		// ── 2. Bootstrap ──────────────────────────────────────────────────────
+		fmt.Printf("\n==> Bootstrap\n")
+		if err := bootstrap(dataDir, seeds.APIURLs); err != nil {
+			fatalf("bootstrap failed: %v", err)
+		}
+
+		// ── 3. Enrich peer list from live API endpoints ────────────────────────
+		fmt.Printf("  Querying network info...\n")
+		stakingContract = fetchNetworkInfo(seeds.APIURLs, &seeds)
+		if stakingContractFlag != "" {
+			stakingContract = stakingContractFlag
+		}
+
+		if len(seeds.CometPeers) > 0 {
+			for _, p := range seeds.CometPeers {
+				fmt.Printf("  CometBFT peer    : %s\n", p)
+			}
+		}
+		if len(seeds.GethEnodes) > 0 {
+			for _, e := range seeds.GethEnodes {
+				fmt.Printf("  Geth bootnode    : %s\n", e)
+			}
+		}
+		if stakingContract != "" {
+			fmt.Printf("  Staking contract : %s\n", stakingContract)
+		}
 	}
 
 	// ── 4. Chain setup ────────────────────────────────────────────────────
@@ -164,7 +174,7 @@ func cmdStart(args []string) {
 // ── status ─────────────────────────────────────────────────────────────────
 
 func cmdStatus(args []string) {
-	_, dataDir, _, _, _, _, _, _, _, _, _ := startFlags(args)
+	_, dataDir, _, _, _, _, _, _, _, _, _, _ := startFlags(args)
 
 	pid, err := readPID(dataDir)
 	if err != nil {
@@ -207,7 +217,7 @@ func cmdStatus(args []string) {
 // ── stop ───────────────────────────────────────────────────────────────────
 
 func cmdStop(args []string) {
-	_, dataDir, _, _, _, _, _, _, _, _, _ := startFlags(args)
+	_, dataDir, _, _, _, _, _, _, _, _, _, _ := startFlags(args)
 
 	pid, err := readPID(dataDir)
 	if err != nil {

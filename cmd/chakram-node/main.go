@@ -57,15 +57,17 @@ Usage:
   chakram-node version           Print version
 
 Start flags:
-  --network URL    Fallback bootstrap URL (default: https://node.chakram.one)
-  --seeds LIST     Comma-separated DNS seed names for peer discovery
-                   (default: seeds.chakram.one)
-                   Multiple orgs can publish seeds under their own domain;
-                   add them here without changing code.
-  --data-dir DIR   Data directory (default: ~/.chakram-node)
-  --no-browser     Don't open the browser on startup
-  --reward ADDR    0x-prefixed EVM address for block rewards
-                   (auto-generated on first run if omitted)
+  --network URL       Fallback bootstrap URL (default: https://node.chakram.one)
+  --seeds LIST        Comma-separated DNS seed names for peer discovery
+                      (default: seeds.chakram.one)
+  --data-dir DIR      Data directory (default: ~/.chakram-node)
+  --no-browser        Don't open the browser on startup
+  --reward ADDR       0x-prefixed EVM address for block rewards
+                      (auto-generated on first run if omitted)
+  --genesis-node      Start as the genesis node — creates a fresh chain without
+                      fetching genesis from the network. Use this for the very
+                      first node on a new chain. Deploy the StakingRegistry and
+                      register validators after the chain is running.
 
 On first run, chakram-node will:
   1. Discover peers via DNS (seeds.chakram.one + any --seeds you add)
@@ -88,6 +90,7 @@ func startFlags(args []string) (
 	noBrowser bool,
 	snapshotInterval, fastSyncHeight int64,
 	fastSyncHash, stateSyncRPCServers string,
+	genesisNode bool,
 ) {
 	fs := flag.NewFlagSet("start", flag.ExitOnError)
 	fs.StringVar(&network, "network", "https://node.chakram.one", "fallback bootstrap URL")
@@ -101,6 +104,7 @@ func startFlags(args []string) (
 	fs.Int64Var(&fastSyncHeight, "trusted-height", 0, "snapshot height to fast-sync from (requires --trusted-hash and pre-imported geth data)")
 	fs.StringVar(&fastSyncHash, "trusted-hash", "", "EVM block hash at --trusted-height (0x-prefixed)")
 	fs.StringVar(&stateSyncRPCServers, "rpc-servers", "", "comma-separated CometBFT RPC URLs for state-sync hash verification")
+	fs.BoolVar(&genesisNode, "genesis-node", false, "start as genesis node — creates own genesis without fetching from network")
 	_ = fs.Parse(args)
 	return
 }

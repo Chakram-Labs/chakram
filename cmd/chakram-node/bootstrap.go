@@ -61,6 +61,97 @@ func bootstrap(dataDir string, apiURLs []string) error {
 	return nil
 }
 
+// bootstrapGenesisNode sets up a fresh chain without fetching genesis from the
+// network. It creates the directory structure, downloads geth, generates a JWT,
+// writes a fresh geth genesis (funding the owner address), and runs geth init.
+// ensureChakramKeys (called later in startConsensus) will create the CometBFT
+// genesis with the local validator key.
+func bootstrapGenesisNode(dataDir string) error {
+	dirs := []string{
+		filepath.Join(dataDir, "geth-data"),
+		filepath.Join(dataDir, "comet"),
+		filepath.Join(dataDir, "comet", "config"),
+		filepath.Join(dataDir, "comet", "data"),
+		filepath.Join(dataDir, "bin"),
+	}
+	for _, d := range dirs {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			return fmt.Errorf("mkdir %s: %w", d, err)
+		}
+	}
+
+	if err := ensureGeth(filepath.Join(dataDir, "bin")); err != nil {
+		return fmt.Errorf("geth download: %w", err)
+	}
+
+	if err := ensureJWT(filepath.Join(dataDir, "jwt.hex")); err != nil {
+		return fmt.Errorf("jwt: %w", err)
+	}
+
+	gethGenesisPath := filepath.Join(dataDir, "comet", "config", "geth-genesis.json")
+	if !fileExists(gethGenesisPath) {
+		data, err := json.MarshalIndent(buildGenesisNodeGethGenesis(), "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal geth genesis: %w", err)
+		}
+		if err := os.WriteFile(gethGenesisPath, data, 0644); err != nil {
+			return fmt.Errorf("write geth genesis: %w", err)
+		}
+		fmt.Printf("  Created geth genesis (chainId 11640)\n")
+	}
+
+	if err := ensureGethInit(dataDir, false); err != nil {
+		return fmt.Errorf("geth init: %w", err)
+	}
+
+	fmt.Printf("  Genesis node bootstrap complete.\n")
+	return nil
+}
+
+// buildGenesisNodeGethGenesis returns the geth genesis for a fresh Chakram chain.
+// The owner address (derived from the well-known owner key) is funded with 1B CHK
+// so it can deploy StakingRegistry and register the genesis validator.
+func buildGenesisNodeGethGenesis() map[string]any {
+	return map[string]any{
+		"config": map[string]any{
+			"chainId":                       11640,
+			"homesteadBlock":                0,
+			"eip150Block":                   0,
+			"eip155Block":                   0,
+			"eip158Block":                   0,
+			"byzantiumBlock":                0,
+			"constantinopleBlock":           0,
+			"petersburgBlock":               0,
+			"istanbulBlock":                 0,
+			"londonBlock":                   0,
+			"mergeNetsplitBlock":            0,
+			"shanghaiTime":                  0,
+			"cancunTime":                    0,
+			"terminalTotalDifficulty":       0,
+			"terminalTotalDifficultyPassed": true,
+			"blobSchedule": map[string]any{
+				"cancun": map[string]any{
+					"baseFeeUpdateFraction": 3338477,
+					"max":                  6,
+					"target":               3,
+				},
+			},
+		},
+		"alloc": map[string]any{
+			// Owner address — funded so it can deploy contracts and register validators.
+			"0xdeF22dBC999aD395527205C90d7922357378CAe0": map[string]any{
+				"balance": "1000000000000000000000000000", // 1B CHK
+			},
+		},
+		"difficulty": "0x0",
+		"extraData":  "0x",
+		"gasLimit":   "0x1C9C380",
+		"mixHash":    "0x0000000000000000000000000000000000000000000000000000000000000000",
+		"nonce":      "0x0",
+		"timestamp":  "0x0",
+	}
+}
+
 // ── geth binary ────────────────────────────────────────────────────────────
 
 func gethBinPath(binDir string) string {
