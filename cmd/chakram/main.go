@@ -199,7 +199,10 @@ func cmdStart(args []string) {
 	logger := makeLogger(*logLevel)
 
 	resolvedRewardAddr := resolveRewardAddr(*home, *rewardAddr)
-	nodeKeyPath := filepath.Join(*home, "reward-key.json")
+	nodeKeyPath := ""
+	if kp := filepath.Join(*home, "reward-key.json"); fileExists(kp) {
+		nodeKeyPath = kp
+	}
 
 	eng, err := engine.NewClientFromFile(*engineURL, *jwtPath)
 	if err != nil {
@@ -378,19 +381,22 @@ func generateRewardKey() (*rewardKeyFile, error) {
 }
 
 func resolveRewardAddr(home, addr string) string {
-	if addr != "" {
-		return addr
-	}
 	keyPath := filepath.Join(home, "reward-key.json")
+	// Key file takes priority: it carries the private key needed for staking ops.
 	if fileExists(keyPath) {
 		data, err := os.ReadFile(keyPath)
 		if err == nil {
 			var k rewardKeyFile
-			if json.Unmarshal(data, &k) == nil && k.Address != "" {
+			if json.Unmarshal(data, &k) == nil && k.Address != "" && k.PrivateKey != "" {
 				return k.Address
 			}
 		}
 	}
+	// No usable key file; fall back to explicit address without key generation.
+	if addr != "" {
+		return addr
+	}
+	// Nothing set: auto-generate a fresh key and persist it.
 	k, err := generateRewardKey()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[chakram] warning: could not generate EVM key: %v\n", err)

@@ -310,6 +310,8 @@ init_node() {
       cp /genesis/node${idx}/config.toml /comet/config/config.toml
       printf '{\"height\":\"0\",\"round\":0,\"step\":0}' > /comet/data/priv_validator_state.json
       chmod 600 /comet/config/priv_validator_key.json
+      # Copy EVM reward key so the node API can serve wallet info and sign staking txs.
+      [ -f /genesis/node${idx}/evm-key.json ] && cp /genesis/node${idx}/evm-key.json /comet/reward-key.json && chmod 600 /comet/reward-key.json || true
       chown -R 1000:1000 /comet
     "
   echo "  $suffix: comet config installed"
