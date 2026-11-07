@@ -43,6 +43,10 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 		return fmt.Errorf("engine client: %w", err)
 	}
 
+	// Derive our CometBFT validator address before creating the app so it can
+	// gate payload pre-building to active validators only.
+	validatorAddr := loadValidatorAddress(cometHome)
+
 	baseApp, err := chakramabci.NewChakramApp(eng, chakramabci.Config{
 		Home:             cometHome,
 		RewardAddress:    cfg.rewardAddr,
@@ -50,6 +54,7 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 		GethDataDir:      filepath.Join(cfg.dataDir, "geth-data"),
 		GethBin:          cfg.gethBin,
 		SnapshotInterval: cfg.snapshotInterval,
+		ValidatorAddress: validatorAddr,
 	}, logger)
 	if err != nil {
 		return fmt.Errorf("create ABCI app: %w", err)
@@ -179,6 +184,22 @@ type consensusCfg struct {
 	stateSyncRPCServers string // comma-separated comet RPC URLs
 	stateSyncTrustHash  string // 0x-prefixed app_hash
 	stateSyncTrustHeight int64
+}
+
+// loadValidatorAddress returns this node's CometBFT validator address (uppercase
+// hex, no 0x) by reading the privval key file. Returns "" if not found.
+func loadValidatorAddress(cometHome string) string {
+	keyFile := filepath.Join(cometHome, "config", "priv_validator_key.json")
+	if !fileExists(keyFile) {
+		return ""
+	}
+	stateFile := filepath.Join(cometHome, "data", "priv_validator_state.json")
+	pv := privval.LoadFilePV(keyFile, stateFile)
+	pubKey, err := pv.GetPubKey()
+	if err != nil {
+		return ""
+	}
+	return pubKey.Address().String()
 }
 
 // ensureChakramKeys generates CometBFT keys if not present and writes

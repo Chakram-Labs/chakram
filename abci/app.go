@@ -37,6 +37,12 @@ type Config struct {
 	GethRPCURL          string // geth plain HTTP RPC URL (e.g. http://127.0.0.1:8545)
 	StakingContractAddr string // 0x-prefixed address of StakingRegistry.sol; empty = PoA mode
 
+	// ValidatorAddress is this node's CometBFT ed25519 address (hex, no 0x).
+	// When set, payload pre-building in Commit is skipped unless this node is
+	// in the active validator set — matching Ethereum's model where only the
+	// active proposer asks the execution layer to build a block.
+	ValidatorAddress string
+
 	// Snapshot support (optional — leave empty to disable).
 	GethDataDir      string // path to geth --datadir (for geth export/import)
 	GethBin          string // path to geth binary
@@ -614,9 +620,13 @@ func (app *ChakramApp) Commit(_ context.Context, _ *abcitypes.RequestCommit) (*a
 
 	app.log.Info("Commit", "height", nextHeight-1)
 
-	// Start payload pre-build for the next height in the background so
-	// PrepareProposal has a ready payloadID when it runs ~2s from now.
-	go app.preBuildPayload(nextHeight, lastExecHash, lastPayloadTime)
+	// Pre-build a payload for the next height only if this node is an active
+	// validator. Follower nodes never propose blocks so they never need this,
+	// and firing FCU-with-attrs on every committed block during blocksync
+	// causes stale goroutines to roll geth's fork-choice head backwards.
+	if app.isValidator() {
+		go app.preBuildPayload(nextHeight, lastExecHash, lastPayloadTime)
+	}
 
 	// Trigger snapshot creation if this height is a snapshot point.
 	if app.snapshots != nil {
@@ -624,6 +634,18 @@ func (app *ChakramApp) Commit(_ context.Context, _ *abcitypes.RequestCommit) (*a
 	}
 
 	return &abcitypes.ResponseCommit{RetainHeight: 0}, nil
+}
+
+// isValidator reports whether this node's CometBFT key is in the active set.
+// Called with mu unlocked; reads ValidatorPubKeys under lock.
+func (app *ChakramApp) isValidator() bool {
+	if app.cfg.ValidatorAddress == "" {
+		return false
+	}
+	app.mu.Lock()
+	_, ok := app.state.ValidatorPubKeys[app.cfg.ValidatorAddress]
+	app.mu.Unlock()
+	return ok
 }
 
 // ── ABCI Snapshot methods ─────────────────────────────────────────────────────
