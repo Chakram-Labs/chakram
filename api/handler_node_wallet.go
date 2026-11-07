@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,16 +36,6 @@ func (s *Server) loadNodeKey() (*rewardKeyJSON, error) {
 	return &k, nil
 }
 
-// isLocalhost returns true when the request originates from the loopback interface.
-// Uses RemoteAddr directly (not X-Forwarded-For) to avoid spoofing.
-func isLocalhost(r *http.Request) bool {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	return host == "127.0.0.1" || host == "::1"
-}
-
 // handleNodeWallet serves GET /api/node-wallet.
 func (s *Server) handleNodeWallet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -72,14 +61,10 @@ func (s *Server) handleNodeWallet(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleNodeWalletExportKey serves GET /api/node-wallet/export-key.
-// Only accessible from localhost — returns the private key for the node's EVM wallet.
+// Returns the private key for the node's EVM wallet.
 func (s *Server) handleNodeWalletExportKey(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	if !isLocalhost(r) {
-		writeError(w, http.StatusForbidden, "export only available from localhost")
 		return
 	}
 	k, err := s.loadNodeKey()
