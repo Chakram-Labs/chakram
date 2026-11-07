@@ -131,11 +131,8 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 		return fmt.Errorf("create CometBFT node: %w", err)
 	}
 
-	if err := cmtNode.Start(); err != nil {
-		return fmt.Errorf("start CometBFT node: %w", err)
-	}
-	logger.Info("chakram consensus started", "peers", cfg.peers)
-
+	// Start the API server before CometBFT so nginx always has something to
+	// connect to — even during the ABCI replay that blocks cmtNode.Start().
 	apiCfg := chakramapi.Config{
 		ListenAddr:          "0.0.0.0:8080",
 		CometRPCURL:         "http://127.0.0.1:26657",
@@ -151,6 +148,11 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 	if err := apiSrv.Start(); err != nil {
 		logger.Warn("node API unavailable", "err", err)
 	}
+
+	if err := cmtNode.Start(); err != nil {
+		return fmt.Errorf("start CometBFT node: %w", err)
+	}
+	logger.Info("chakram consensus started", "peers", cfg.peers)
 
 	<-ctx.Done()
 
