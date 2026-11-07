@@ -55,17 +55,20 @@ function setStatSafe(id, val) {
 
 async function fetchStats() {
   try {
-    const res = await fetch(API_URL, { signal: AbortSignal.timeout(6000) });
-    if (!res.ok) throw new Error('status ' + res.status);
-    const data = await res.json();
+    const [statusRes, stakingRes] = await Promise.all([
+      fetch(API_URL, { signal: AbortSignal.timeout(6000) }),
+      fetch('https://node.chakram.one/api/staking', { signal: AbortSignal.timeout(6000) }),
+    ]);
+    if (!statusRes.ok) throw new Error('status ' + statusRes.status);
+    const data = await statusRes.json();
+    const staking = stakingRes.ok ? await stakingRes.json() : null;
 
-    const height = data.block_height ?? data.latest_block_height ?? null;
-    const validators = data.validator_count ?? data.validators ?? null;
-    const txs = data.total_txs ?? data.tx_count ?? null;
+    const height = data.height ?? null;
+    const validators = staking?.validators?.filter(v => v.active)?.length ?? null;
 
     setStatSafe('stat-block', fmt(height));
     setStatSafe('stat-validators', fmt(validators));
-    setStatSafe('stat-txs', fmt(txs));
+    setStatSafe('stat-txs', '—');
     setStatSafe('stat-status', '● Live');
     setStatSafe('hero-block-height', height ? '#' + fmt(height) : '—');
     setStatSafe('hero-validators', fmt(validators));

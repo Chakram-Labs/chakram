@@ -844,6 +844,26 @@ code { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; }
 
 .step:last-child::before { display: none; }
 
+.step-optional { opacity: 0.9; }
+.step-num-opt {
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-2);
+}
+.badge-optional {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 1px 6px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
 .step-num {
   width: 40px;
   height: 40px;

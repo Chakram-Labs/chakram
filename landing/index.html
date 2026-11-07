@@ -405,7 +405,7 @@
               <h4>First-run bootstrap (fully automatic)</h4>
               <p>On the very first start, <code class="t-mono lime-text">chakram-node</code> handles everything:</p>
               <ul class="auto-list">
-                <li>Downloads geth for your platform from GitHub</li>
+                <li>Downloads geth for your platform automatically</li>
                 <li>Fetches the genesis block from <code class="t-mono lime-text">node.chakram.one</code></li>
                 <li>Initialises chain data and generates your validator keys</li>
                 <li>Connects to peers and starts syncing</li>
@@ -508,6 +508,35 @@
               <p>Open the <strong>Staking</strong> tab on your dashboard once synced. Stake CHK and register — you're in the active set immediately.</p>
             </div>
           </div>
+
+          <div class="step step-optional">
+            <div class="step-num step-num-opt">5</div>
+            <div class="step-body">
+              <h4>Become a seed node <span class="badge-optional">optional</span></h4>
+              <p>Seed nodes help new peers discover the network. If your server has a public domain and stable uptime, you can publish yourself as a seed via DNS — no code changes or approvals needed.</p>
+
+              <p style="margin-top:0.75rem;"><strong>Step A — find your peer IDs.</strong> Once your node is running:</p>
+              <div class="code-block" style="margin-top:0.4rem;">
+                <span class="code-line">curl http://localhost:8080/api/node-info</span>
+              </div>
+              <p style="margin-top:0.5rem;font-size:0.85rem;color:var(--muted);">Copy the <code class="t-mono lime-text">comet_peer</code> and <code class="t-mono lime-text">geth_enode</code> values from the response.</p>
+
+              <p style="margin-top:0.75rem;"><strong>Step B — add a DNS TXT record</strong> to any domain you control (e.g. <code class="t-mono lime-text">seeds.yourorg.com</code>):</p>
+              <div class="code-block" style="margin-top:0.4rem;">
+                <span class="code-comment"># DNS TXT record value (single line):</span>
+                <span class="code-line">comet=&lt;comet_peer&gt; geth=&lt;geth_enode&gt; api=https://&lt;your-domain&gt;</span>
+              </div>
+              <p style="margin-top:0.5rem;font-size:0.85rem;color:var(--muted);">Use your registrar's DNS panel (Namecheap, Cloudflare, Route 53, etc.) to add the record. Propagation takes a few minutes.</p>
+
+              <p style="margin-top:0.75rem;"><strong>Step C — link your seeds.</strong> Two options:</p>
+              <ul class="auto-list" style="margin-top:0.4rem;">
+                <li><strong>Private / org use:</strong> pass your domain via the <code class="t-mono lime-text">--seeds</code> flag when starting chakram-node:<br>
+                  <code class="t-mono lime-text" style="font-size:0.8rem;">./chakram-node --seeds seeds.chakram.one,seeds.yourorg.com</code>
+                </li>
+                <li><strong>Public listing:</strong> open a <a href="https://github.com/Chakram-Labs/chakram/issues" target="_blank" rel="noopener" style="color:var(--lime);">GitHub issue</a> titled "Add seed: seeds.yourorg.com" and we'll add a <code class="t-mono lime-text">link=seeds.yourorg.com</code> entry to <code class="t-mono lime-text">seeds.chakram.one</code>. All existing nodes will discover your seeds automatically — no restart needed.</li>
+              </ul>
+            </div>
+          </div>
         </div>
 
         <div class="run-info reveal reveal-delay-2">
@@ -522,12 +551,25 @@
           </div>
 
           <div class="info-card" style="margin-top:var(--space-4);">
+            <h4>How peer discovery works</h4>
+            <p style="font-size:0.82rem;color:var(--muted);line-height:1.6;margin-bottom:0.75rem;">
+              On startup, <code class="t-mono lime-text" style="font-size:0.78rem;">chakram-node</code> queries <code class="t-mono lime-text" style="font-size:0.78rem;">seeds.chakram.one</code> DNS TXT records to find peers automatically — no hardcoded IPs.
+            </p>
+            <p style="font-size:0.82rem;color:var(--muted);line-height:1.6;margin-bottom:0.75rem;">
+              Records contain <code class="t-mono lime-text" style="font-size:0.78rem;">comet=</code>, <code class="t-mono lime-text" style="font-size:0.78rem;">geth=</code>, and <code class="t-mono lime-text" style="font-size:0.78rem;">api=</code> fields. A <code class="t-mono lime-text" style="font-size:0.78rem;">link=</code> field lets any organisation publish seeds under their own domain — just add a link and all nodes discover them on next startup.
+            </p>
+            <p style="font-size:0.82rem;color:var(--muted);line-height:1.6;">
+              Once connected, peers are stored in <code class="t-mono lime-text" style="font-size:0.78rem;">addrbook.json</code> and future restarts reconnect directly — no DNS needed.
+            </p>
+          </div>
+
+          <div class="info-card" style="margin-top:var(--space-4);">
             <h4>Useful commands</h4>
             <div class="cmd-list">
               <div class="cmd-row"><code class="t-mono lime-text" style="font-size:0.72rem;">docker compose --profile fullnode up -d</code><span>Start</span></div>
               <div class="cmd-row"><code class="t-mono lime-text" style="font-size:0.72rem;">docker compose --profile fullnode logs -f</code><span>Logs</span></div>
               <div class="cmd-row"><code class="t-mono lime-text" style="font-size:0.72rem;">docker compose --profile fullnode down</code><span>Stop</span></div>
-              <div class="cmd-row"><code class="t-mono lime-text" style="font-size:0.72rem;">curl localhost:8080/api/status</code><span>Sync check</span></div>
+              <div class="cmd-row"><code class="t-mono lime-text" style="font-size:0.72rem;">curl localhost:8080/api/node-info</code><span>Peer IDs</span></div>
             </div>
           </div>
 
