@@ -95,8 +95,11 @@ func cmdStart(args []string) {
 	}
 
 	// ── 4. Chain setup ────────────────────────────────────────────────────
-	chainID     := resolveChainID(dataDir)
-	rewardAddr   = resolveRewardAddr(dataDir, rewardAddr)
+	chainID := resolveChainID(dataDir)
+	if genesisNode && rewardAddr == "" {
+		rewardAddr = "0xdeF22dBC999aD395527205C90d7922357378CAe0"
+	}
+	rewardAddr = resolveRewardAddr(dataDir, rewardAddr)
 	nodeKeyPath := filepath.Join(dataDir, "reward-key.json")
 
 	// ── 5. Start geth ────────────────────────────────────────────────────
