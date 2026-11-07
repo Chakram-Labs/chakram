@@ -1,6 +1,12 @@
 import { ethers } from 'ethers';
 import { GETH_RPC, CHAIN_ID, EXPLORER_URL } from '../api/client';
 
+declare global {
+  interface Window {
+    ethereum?: { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> };
+  }
+}
+
 type EthProvider = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
   on: (event: string, cb: (...args: unknown[]) => void) => void;
