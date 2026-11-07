@@ -31,7 +31,7 @@ func splitSeeds(s string) []string {
 // ── start ──────────────────────────────────────────────────────────────────
 
 func cmdStart(args []string) {
-	networkURL, dataDir, rewardAddr, seedsDNS, noBrowser,
+	networkURL, dataDir, rewardAddr, seedsDNS, stakingContractFlag, p2pHostFlag, noBrowser,
 		snapshotInterval, fastSyncHeight, fastSyncHash, stateSyncRPCServers := startFlags(args)
 
 	fmt.Printf("Chakram Node\n")
@@ -66,6 +66,9 @@ func cmdStart(args []string) {
 	// seeds (in case DNS didn't have them yet) and returns staking contract.
 	fmt.Printf("  Querying network info...\n")
 	stakingContract := fetchNetworkInfo(seeds.APIURLs, &seeds)
+	if stakingContractFlag != "" {
+		stakingContract = stakingContractFlag
+	}
 
 	if len(seeds.CometPeers) > 0 {
 		for _, p := range seeds.CometPeers {
@@ -142,6 +145,7 @@ func cmdStart(args []string) {
 		stakingContract:      stakingContract,
 		nodeKeyPath:          nodeKeyPath,
 		gethBin:              gethBin,
+		p2pHost:              p2pHostFlag,
 		snapshotInterval:     snapshotInterval,
 		fastSyncHeight:       fastSyncHeight,
 		fastSyncHash:         fastSyncHash,
@@ -161,7 +165,7 @@ func cmdStart(args []string) {
 // ── status ─────────────────────────────────────────────────────────────────
 
 func cmdStatus(args []string) {
-	_, dataDir, _, _, _, _, _, _, _ := startFlags(args)
+	_, dataDir, _, _, _, _, _, _, _, _, _ := startFlags(args)
 
 	pid, err := readPID(dataDir)
 	if err != nil {
@@ -204,7 +208,7 @@ func cmdStatus(args []string) {
 // ── stop ───────────────────────────────────────────────────────────────────
 
 func cmdStop(args []string) {
-	_, dataDir, _, _, _, _, _, _, _ := startFlags(args)
+	_, dataDir, _, _, _, _, _, _, _, _, _ := startFlags(args)
 
 	pid, err := readPID(dataDir)
 	if err != nil {

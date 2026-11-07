@@ -84,7 +84,7 @@ func fatalf(format string, args ...any) {
 }
 
 func startFlags(args []string) (
-	network, dataDir, reward, seeds string,
+	network, dataDir, reward, seeds, stakingContract, p2pHost string,
 	noBrowser bool,
 	snapshotInterval, fastSyncHeight int64,
 	fastSyncHash, stateSyncRPCServers string,
@@ -94,6 +94,8 @@ func startFlags(args []string) (
 	fs.StringVar(&seeds, "seeds", defaultSeedsDNS, "comma-separated DNS seed names")
 	fs.StringVar(&dataDir, "data-dir", defaultDataDir(), "data directory")
 	fs.StringVar(&reward, "reward", "", "EVM address for block rewards (auto-generated if empty)")
+	fs.StringVar(&stakingContract, "staking-contract", "", "0x-prefixed StakingRegistry contract address")
+	fs.StringVar(&p2pHost, "p2p-host", "", "publicly reachable hostname/IP for P2P (used in /api/node-info)")
 	fs.BoolVar(&noBrowser, "no-browser", false, "don't open browser on startup")
 	fs.Int64Var(&snapshotInterval, "snapshot-interval", 0, "blocks between snapshots (0 = disabled)")
 	fs.Int64Var(&fastSyncHeight, "trusted-height", 0, "snapshot height to fast-sync from (requires --trusted-hash and pre-imported geth data)")

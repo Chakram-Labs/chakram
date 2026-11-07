@@ -139,6 +139,7 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 		StaticFS:            webUI(),
 		StakingContractAddr: cfg.stakingContract,
 		NodeKeyPath:         cfg.nodeKeyPath,
+		P2PHost:             cfg.p2pHost,
 	}
 	apiSrv := chakramapi.New(apiCfg, logger)
 	if err := apiSrv.Start(); err != nil {
@@ -164,6 +165,7 @@ type consensusCfg struct {
 	staticDir       string
 	stakingContract string
 	nodeKeyPath     string
+	p2pHost         string
 
 	// Snapshot / state-sync support.
 	gethBin          string // path to geth binary
