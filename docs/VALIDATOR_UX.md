@@ -96,15 +96,22 @@ The node's own auto-generated EVM wallet (see §2 above).
 **Tab 2 — Address Lookup**  
 The existing address search functionality.
 
-### 6. RainbowKit wallet connection
+### 6. Remove Connect Wallet from dashboard
 
-Replace the manual `window.ethereum` connect flow in `Staking.tsx` and `Settings.tsx` with RainbowKit. Handles:
-- Multiple wallet extensions (TronLink, Brave Wallet, etc. conflicting with MetaMask)
-- Chain switching
-- Disconnect
-- Mobile wallets via WalletConnect
+The dashboard is a local node management tool (`localhost:8080`), not a dApp. The node operator IS the node. Once the node has its own EVM wallet (§1), all signing (register, unbond, withdraw) is done by the node itself via internal API calls — no MetaMask, no RainbowKit needed.
 
-See `contracts/whitelist.py` for context on the owner side of the flow.
+**Remove from the UI:**
+- "Connect Wallet" button on Staking page
+- WalletBar component
+- All `window.ethereum` / `connectWallet()` calls in `Staking.tsx` and `Settings.tsx`
+- `connectWallet`, `ensureChakramNetwork`, `getEthProvider` from `staking.ts`
+
+**Replace with:**
+- Staking page reads the node's own wallet address from `/api/node-wallet`
+- Register / Unbond / Withdraw buttons POST to local API endpoints that sign with the node's key
+- New API endpoints: `POST /api/staking/register`, `POST /api/staking/unbond`, `POST /api/staking/withdraw`
+
+The only external wallet interaction (owner calling `whitelist()`) is handled by `contracts/whitelist.py` — not the UI.
 
 ---
 
