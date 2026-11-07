@@ -435,10 +435,12 @@ func TestHandleFaucetSuccess(t *testing.T) {
 	defer gethSrv.Close()
 
 	s := New(Config{
-		ListenAddr:  "127.0.0.1:0",
-		CometRPCURL: cometSrv.URL,
-		GethRPCURL:  gethSrv.URL,
-		DevMode:     true,
+		ListenAddr:    "127.0.0.1:0",
+		CometRPCURL:   cometSrv.URL,
+		GethRPCURL:    gethSrv.URL,
+		DevMode:       true,
+		FaucetAddr:    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+		FaucetPrivKey: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 	}, nil)
 
 	body := `{"address":"0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"}`
@@ -470,10 +472,12 @@ func TestHandleFaucetRateLimit(t *testing.T) {
 	defer gethSrv.Close()
 
 	s := New(Config{
-		ListenAddr:  "127.0.0.1:0",
-		CometRPCURL: cometSrv.URL,
-		GethRPCURL:  gethSrv.URL,
-		DevMode:     true,
+		ListenAddr:    "127.0.0.1:0",
+		CometRPCURL:   cometSrv.URL,
+		GethRPCURL:    gethSrv.URL,
+		DevMode:       true,
+		FaucetAddr:    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+		FaucetPrivKey: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 	}, nil)
 
 	send := func() int {
