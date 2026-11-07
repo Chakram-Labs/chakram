@@ -766,9 +766,10 @@ func (s *Server) handleNodeInfo(w http.ResponseWriter, r *http.Request) {
 	genesisURL := fmt.Sprintf("%s://%s/api/genesis", scheme, r.Host)
 
 	writeJSON(w, http.StatusOK, NodeInfoResponse{
-		CometPeer:  cometPeer,
-		GethEnode:  gethEnode,
-		GenesisURL: genesisURL,
+		CometPeer:       cometPeer,
+		GethEnode:       gethEnode,
+		GenesisURL:      genesisURL,
+		StakingContract: s.cfg.StakingContractAddr,
 	})
 }
 

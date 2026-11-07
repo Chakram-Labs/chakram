@@ -103,12 +103,13 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 	logger.Info("chakram consensus started", "peers", cfg.peers)
 
 	apiCfg := chakramapi.Config{
-		ListenAddr:  "0.0.0.0:8080",
-		CometRPCURL: "http://127.0.0.1:26657",
-		GethRPCURL:  "http://127.0.0.1:8545",
-		HomeDir:     cometHome,
-		StaticDir:   cfg.staticDir,
-		StaticFS:    webUI(),
+		ListenAddr:          "0.0.0.0:8080",
+		CometRPCURL:         "http://127.0.0.1:26657",
+		GethRPCURL:          "http://127.0.0.1:8545",
+		HomeDir:             cometHome,
+		StaticDir:           cfg.staticDir,
+		StaticFS:            webUI(),
+		StakingContractAddr: cfg.stakingContract,
 	}
 	apiSrv := chakramapi.New(apiCfg, logger)
 	if err := apiSrv.Start(); err != nil {
@@ -127,11 +128,12 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 }
 
 type consensusCfg struct {
-	dataDir   string
-	chainID   string
-	rewardAddr string
-	peers     string
-	staticDir string
+	dataDir         string
+	chainID         string
+	rewardAddr      string
+	peers           string
+	staticDir       string
+	stakingContract string
 }
 
 // ensureChakramKeys generates CometBFT keys if not present and writes

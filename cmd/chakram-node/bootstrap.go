@@ -282,22 +282,23 @@ func ensureGenesis(dataDir, networkURL string) (changed bool, err error) {
 	return true, nil
 }
 
-// fetchPeerInfo returns comet_peer and geth_enode from the bootstrap node.
-func fetchPeerInfo(networkURL string) (cometPeer, gethEnode string, err error) {
+// fetchPeerInfo returns comet_peer, geth_enode, and staking_contract from the bootstrap node.
+func fetchPeerInfo(networkURL string) (cometPeer, gethEnode, stakingContract string, err error) {
 	resp, err := httpGetJSON(networkURL + "/api/node-info")
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	type nodeInfo struct {
-		CometPeer string `json:"comet_peer"`
-		GethEnode string `json:"geth_enode"`
+		CometPeer       string `json:"comet_peer"`
+		GethEnode       string `json:"geth_enode"`
+		StakingContract string `json:"staking_contract"`
 	}
 	var ni nodeInfo
 	body, _ := json.Marshal(resp)
 	if err := json.Unmarshal(body, &ni); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	return ni.CometPeer, ni.GethEnode, nil
+	return ni.CometPeer, ni.GethEnode, ni.StakingContract, nil
 }
 
 // ── JWT secret ─────────────────────────────────────────────────────────────

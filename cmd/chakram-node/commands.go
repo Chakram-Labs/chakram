@@ -27,13 +27,17 @@ func cmdStart(args []string) {
 	}
 
 	// Fetch peer info (non-fatal — node can still start without peers).
-	var cometPeer, gethEnode string
+	var cometPeer, gethEnode, stakingContract string
 	fmt.Printf("  Fetching peer info...\n")
-	if p, e, err := fetchPeerInfo(networkURL); err == nil {
+	if p, e, s, err := fetchPeerInfo(networkURL); err == nil {
 		cometPeer = p
 		gethEnode = e
-		fmt.Printf("  CometBFT peer : %s\n", cometPeer)
-		fmt.Printf("  Geth bootnode : %s\n", gethEnode)
+		stakingContract = s
+		fmt.Printf("  CometBFT peer    : %s\n", cometPeer)
+		fmt.Printf("  Geth bootnode    : %s\n", gethEnode)
+		if stakingContract != "" {
+			fmt.Printf("  Staking contract : %s\n", stakingContract)
+		}
 	} else {
 		fmt.Printf("  Warning: could not fetch peer info: %v\n", err)
 	}
@@ -99,10 +103,11 @@ func cmdStart(args []string) {
 	}()
 
 	if err := startConsensus(ctx, consensusCfg{
-		dataDir:    dataDir,
-		chainID:    chainID,
-		rewardAddr: rewardAddr,
-		peers:      cometPeer,
+		dataDir:         dataDir,
+		chainID:         chainID,
+		rewardAddr:      rewardAddr,
+		peers:           cometPeer,
+		stakingContract: stakingContract,
 	}); err != nil {
 		gethProc.Process.Kill()
 		fatalf("consensus error: %v", err)
