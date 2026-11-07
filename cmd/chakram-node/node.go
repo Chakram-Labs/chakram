@@ -124,7 +124,7 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 		node.DefaultGenesisDocProviderFunc(cmtCfg),
 		cmtconfig.DefaultDBProvider,
 		node.DefaultMetricsProvider(cmtCfg.Instrumentation),
-		cmtlog.NewNopLogger(),
+		cmtlog.NewFilter(cmtlog.NewTMLogger(cmtlog.NewSyncWriter(os.Stderr)), cmtlog.AllowInfo()),
 	)
 	if err != nil {
 		return fmt.Errorf("create CometBFT node: %w", err)
