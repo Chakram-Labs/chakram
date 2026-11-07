@@ -48,13 +48,14 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 	validatorAddr := loadValidatorAddress(cometHome)
 
 	baseApp, err := chakramabci.NewChakramApp(eng, chakramabci.Config{
-		Home:             cometHome,
-		RewardAddress:    cfg.rewardAddr,
-		GethRPCURL:       "http://127.0.0.1:8545",
-		GethDataDir:      filepath.Join(cfg.dataDir, "geth-data"),
-		GethBin:          cfg.gethBin,
-		SnapshotInterval: cfg.snapshotInterval,
-		ValidatorAddress: validatorAddr,
+		Home:                cometHome,
+		RewardAddress:       cfg.rewardAddr,
+		GethRPCURL:          "http://127.0.0.1:8545",
+		GethDataDir:         filepath.Join(cfg.dataDir, "geth-data"),
+		GethBin:             cfg.gethBin,
+		SnapshotInterval:    cfg.snapshotInterval,
+		ValidatorAddress:    validatorAddr,
+		StakingContractAddr: cfg.stakingContract,
 	}, logger)
 	if err != nil {
 		return fmt.Errorf("create ABCI app: %w", err)
