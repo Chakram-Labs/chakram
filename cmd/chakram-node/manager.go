@@ -33,7 +33,7 @@ func startGeth(dataDir, jwtPath string) (*exec.Cmd, error) {
 		"--http",
 		"--http.addr", "127.0.0.1",
 		"--http.port", "8545",
-		"--http.api", "eth,net,web3,admin",
+		"--http.api", "eth,net,web3,admin,debug",
 		"--http.vhosts", "localhost,127.0.0.1",
 		// Engine API (for chakram consensus via JWT)
 		"--authrpc.addr", "127.0.0.1",
@@ -70,6 +70,31 @@ func waitForGeth(ctx context.Context) error {
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
+}
+
+// debugSetHeadToGenesis calls debug_setHead("0x0") on geth's HTTP RPC, rolling
+// the canonical chain head back to genesis. All imported blocks remain in the
+// database as non-canonical; the engine API can re-canonize them one by one
+// via FCU without ever exceeding the 32-block reorg depth limit.
+func debugSetHeadToGenesis() error {
+	client := &http.Client{Timeout: 30 * time.Second}
+	payload := `{"jsonrpc":"2.0","method":"debug_setHead","params":["0x0"],"id":1}`
+	resp, err := client.Post("http://127.0.0.1:8545", "application/json",
+		strings.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("debug_setHead RPC: %w", err)
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Error *struct{ Message string } `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("debug_setHead decode: %w", err)
+	}
+	if result.Error != nil {
+		return fmt.Errorf("debug_setHead: %s", result.Error.Message)
+	}
+	return nil
 }
 
 // gethBlockNumber returns the current block number from local geth.

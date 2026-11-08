@@ -128,6 +128,18 @@ func cmdStart(args []string) {
 	}
 	fmt.Printf("  geth ready.\n")
 
+	// If a snapshot was imported, reset geth's canonical head to genesis so
+	// CometBFT's blocksync replay never triggers geth's 32-block reorg limit.
+	if fileExists(snapshotMarkerPath(dataDir)) {
+		fmt.Printf("  Resetting geth canonical head to genesis (snapshot fast-replay)...\n")
+		if err := debugSetHeadToGenesis(); err != nil {
+			gethProc.Process.Kill()
+			fatalf("reset geth head after snapshot: %v\n  Wipe %s and retry.", err, dataDir)
+		}
+		os.Remove(snapshotMarkerPath(dataDir))
+		fmt.Printf("  Canonical head reset — CometBFT will fast-replay snapshot blocks.\n")
+	}
+
 	// ── 6. Start consensus ───────────────────────────────────────────────
 	fmt.Printf("\n==> Starting consensus\n")
 	fmt.Printf("  Chain ID     : %s\n", chainID)
@@ -301,8 +313,9 @@ func cmdSnapshot(args []string) {
 	os.Remove(chainFile)
 	fmt.Printf("  Import complete.\n")
 
-	// Do NOT set app_state.json here — see tryAutoSnapshot for the reason.
-	// CometBFT will blocksync and fast-replay the pre-imported geth blocks.
+	// Write the marker so 'chakram-node start' knows to call debug_setHead after
+	// geth is up. See tryAutoSnapshot for the full explanation.
+	_ = os.WriteFile(snapshotMarkerPath(dataDir), []byte(fmt.Sprintf("%d", meta.Height)), 0644)
 
 	fmt.Printf("\n==> Done. Run 'chakram-node start' — will fast-replay %d pre-imported blocks.\n", meta.Height)
 }
@@ -349,6 +362,13 @@ func formatBytes(b int64) string {
 	}
 }
 
+// snapshotMarkerPath returns the path to the "snapshot imported, needs head
+// reset" marker file. Its presence means geth has been imported to height N
+// but its canonical head has not yet been reset to genesis.
+func snapshotMarkerPath(dataDir string) string {
+	return filepath.Join(dataDir, "snapshot-needs-head-reset")
+}
+
 // tryAutoSnapshot checks if a snapshot is available from any seed node and,
 // on first run (no existing chain progress), downloads and imports it so the
 // node starts at the snapshot height instead of syncing from genesis.
@@ -358,6 +378,12 @@ func tryAutoSnapshot(dataDir string, apiURLs []string) error {
 	appStatePath := filepath.Join(dataDir, "comet", "data", "app_state.json")
 	if fileExists(appStatePath) {
 		return fmt.Errorf("existing chain state found")
+	}
+
+	// If a previous import already ran (e.g. via 'chakram-node snapshot'), skip
+	// re-downloading. The head reset will happen in cmdStart after geth is up.
+	if fileExists(snapshotMarkerPath(dataDir)) {
+		return nil
 	}
 
 	// Find the first seed that has a snapshot.
@@ -392,14 +418,15 @@ func tryAutoSnapshot(dataDir string, apiURLs []string) error {
 	}
 	os.Remove(chainFile)
 
-	// Do NOT call applyFastSync here. Setting app_state.json to height N while
-	// CometBFT's block store is empty (storeHeight=0) causes CometBFT to panic
-	// trying to replay N blocks it doesn't have.
-	//
-	// Instead, leave app_state at height 0. CometBFT will blocksync normally
-	// and call FinalizeBlock for blocks 1..N. Since geth already has these blocks
-	// from the import, each engine_newPayload returns VALID immediately and
-	// engine_FCU just advances the head — far faster than re-executing EVM state.
+	// Write the marker file. After geth starts (in cmdStart), we will call
+	// debug_setHead("0x0") to roll geth's canonical head back to genesis.
+	// This is required because geth import leaves the head at block N, and the
+	// first engine_FCU from CometBFT (asking to set head=block1) would be a
+	// reorg of depth N-1 — exceeding geth's hard 32-block engine API limit.
+	// After the head reset, each FinalizeBlock(k) is just FCU extending the
+	// chain by 1, with engine_newPayload returning VALID instantly (data in DB).
+	_ = os.WriteFile(snapshotMarkerPath(dataDir), []byte(fmt.Sprintf("%d", meta.Height)), 0644)
+
 	fmt.Printf("  Geth import complete — CometBFT will fast-replay %d pre-imported blocks.\n\n", meta.Height)
 	return nil
 }
