@@ -23,7 +23,8 @@ def compile_contract():
         print("solc error:", result.stderr, file=sys.stderr)
         sys.exit(1)
     data = json.loads(result.stdout)
-    contract_key = "contracts/StakingRegistry.sol:StakingRegistry"
+    # solc uses the full path as key; find it dynamically
+    contract_key = next(k for k in data["contracts"] if k.endswith(":StakingRegistry"))
     entry = data["contracts"][contract_key]
     bytecode = "0x" + entry["bin"]
     abi = entry["abi"] if isinstance(entry["abi"], list) else json.loads(entry["abi"])
