@@ -81,16 +81,6 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 	cmtCfg.Consensus.TimeoutCommit = 500 * time.Millisecond
 	cmtCfg.Consensus.CreateEmptyBlocks = true
 
-	// Fast-sync: if the user provided a trusted height+hash (from a pre-imported
-	// geth snapshot), write app_state.json so Info returns that height and
-	// CometBFT only blocksyncs from there to tip instead of from genesis.
-	if cfg.fastSyncHeight > 0 && cfg.fastSyncHash != "" {
-		if err := applyFastSync(cometHome, cfg.fastSyncHeight, cfg.fastSyncHash); err != nil {
-			return fmt.Errorf("fast-sync: write app state: %w", err)
-		}
-		logger.Info("fast-sync: app_state set", "height", cfg.fastSyncHeight)
-	}
-
 	// CometBFT native state sync (requires external RPC servers for trust verification).
 	if cfg.stateSyncEnable && cfg.stateSyncRPCServers != "" {
 		cmtCfg.StateSync.Enable = true

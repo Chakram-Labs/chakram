@@ -301,13 +301,10 @@ func cmdSnapshot(args []string) {
 	os.Remove(chainFile)
 	fmt.Printf("  Import complete.\n")
 
-	// Write app_state.json.
-	cometHome := filepath.Join(dataDir, "comet")
-	if err := applyFastSync(cometHome, int64(meta.Height), meta.Hash); err != nil {
-		fatalf("write app state: %v", err)
-	}
+	// Do NOT set app_state.json here — see tryAutoSnapshot for the reason.
+	// CometBFT will blocksync and fast-replay the pre-imported geth blocks.
 
-	fmt.Printf("\n==> Done. Run 'chakram-node start' to continue syncing from height %d.\n", meta.Height)
+	fmt.Printf("\n==> Done. Run 'chakram-node start' — will fast-replay %d pre-imported blocks.\n", meta.Height)
 }
 
 type snapshotMetaHTTP struct {
@@ -395,12 +392,15 @@ func tryAutoSnapshot(dataDir string, apiURLs []string) error {
 	}
 	os.Remove(chainFile)
 
-	cometHome := filepath.Join(dataDir, "comet")
-	if err := applyFastSync(cometHome, int64(meta.Height), meta.Hash); err != nil {
-		return fmt.Errorf("apply fast-sync: %w", err)
-	}
-
-	fmt.Printf("  Snapshot applied — starting from block %d.\n\n", meta.Height)
+	// Do NOT call applyFastSync here. Setting app_state.json to height N while
+	// CometBFT's block store is empty (storeHeight=0) causes CometBFT to panic
+	// trying to replay N blocks it doesn't have.
+	//
+	// Instead, leave app_state at height 0. CometBFT will blocksync normally
+	// and call FinalizeBlock for blocks 1..N. Since geth already has these blocks
+	// from the import, each engine_newPayload returns VALID immediately and
+	// engine_FCU just advances the head — far faster than re-executing EVM state.
+	fmt.Printf("  Geth import complete — CometBFT will fast-replay %d pre-imported blocks.\n\n", meta.Height)
 	return nil
 }
 
