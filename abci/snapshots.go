@@ -156,16 +156,15 @@ func (sm *SnapshotManager) createSnapshot(height uint64, execHash []byte) error 
 	defer os.RemoveAll(tmpDir) // defensive cleanup on any early return
 
 	chainFile := filepath.Join(tmpDir, "chain.rlp")
-	cmd := exec.Command(sm.gethBin,
-		"--datadir", sm.gethDataDir,
-		"export", chainFile,
-		"0", strconv.FormatUint(height, 10),
-	)
+	// Use geth attach via IPC — no exclusive datadir lock required when geth is running.
+	ipcPath := "ipc:" + filepath.Join(sm.gethDataDir, "geth.ipc")
+	jsCmd := fmt.Sprintf(`admin.exportChain(%q, 0, %d)`, chainFile, height)
+	cmd := exec.Command(sm.gethBin, "--exec", jsCmd, "attach", ipcPath)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		os.RemoveAll(tmpDir)
-		return fmt.Errorf("geth export: %w", err)
+		return fmt.Errorf("geth export via IPC: %w", err)
 	}
 
 	chunkCount, err := splitIntoChunks(chainFile, tmpDir)
