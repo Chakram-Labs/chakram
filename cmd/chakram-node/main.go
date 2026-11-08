@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"chakram/internal/version"
 )
@@ -22,7 +23,7 @@ import (
 func main() {
 	cmd := "start"
 	args := os.Args[1:]
-	if len(args) > 0 && len(args[0]) > 0 && args[0][0] != '-' {
+	if len(args) > 0 && len(args[0]) > 0 && args[0][0] != '-' && !looksLikeFilePath(args[0]) {
 		cmd = args[0]
 		args = args[1:]
 	}
@@ -78,6 +79,15 @@ On first run, chakram-node will:
   6. Start syncing and open the status page in your browser
 
 `)
+}
+
+// looksLikeFilePath reports whether s is a file path rather than a subcommand
+// name. On Windows, some launch methods (Explorer double-click, Run dialog,
+// certain terminals) pass the executable's own path as the first argument.
+func looksLikeFilePath(s string) bool {
+	return strings.ContainsAny(s, `/\`) ||
+		strings.HasSuffix(strings.ToLower(s), ".exe") ||
+		(len(s) >= 2 && s[1] == ':') // e.g. C:\...
 }
 
 func fatalf(format string, args ...any) {
