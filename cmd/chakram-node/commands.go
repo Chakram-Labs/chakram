@@ -92,6 +92,14 @@ func cmdStart(args []string) {
 		if stakingContract != "" {
 			fmt.Printf("  Staking contract : %s\n", stakingContract)
 		}
+
+		// ── 3.5. Auto-snapshot on first run ───────────────────────────────────
+		// Before geth starts (no datadir lock yet), check if the seed nodes have
+		// a snapshot. If this is the first run (no existing chain progress), import
+		// it so we start at the snapshot height instead of syncing from genesis.
+		if err := tryAutoSnapshot(dataDir, seeds.APIURLs); err != nil {
+			fmt.Printf("  No snapshot available (%v) — syncing from genesis.\n", err)
+		}
 	}
 
 	// ── 4. Chain setup ────────────────────────────────────────────────────
@@ -342,6 +350,58 @@ func formatBytes(b int64) string {
 	default:
 		return fmt.Sprintf("%d B", b)
 	}
+}
+
+// tryAutoSnapshot checks if a snapshot is available from any seed node and,
+// on first run (no existing chain progress), downloads and imports it so the
+// node starts at the snapshot height instead of syncing from genesis.
+// Geth must NOT be running when this is called (import requires the datadir lock).
+func tryAutoSnapshot(dataDir string, apiURLs []string) error {
+	// Skip if the node already has chain progress.
+	appStatePath := filepath.Join(dataDir, "comet", "data", "app_state.json")
+	if fileExists(appStatePath) {
+		return fmt.Errorf("existing chain state found")
+	}
+
+	// Find the first seed that has a snapshot.
+	var meta *snapshotMetaHTTP
+	var snapshotBase string
+	for _, url := range apiURLs {
+		m, err := fetchSnapshotMeta(url)
+		if err == nil && m != nil && m.Height > 0 {
+			meta = m
+			snapshotBase = url
+			break
+		}
+	}
+	if meta == nil {
+		return fmt.Errorf("no snapshot available on seed nodes")
+	}
+
+	fmt.Printf("\n==> Auto-snapshot (height %d, %s)\n", meta.Height, formatBytes(meta.SizeBytes))
+	fmt.Printf("  Downloading from %s...\n", snapshotBase)
+
+	chainFile := filepath.Join(dataDir, "snapshot-import.rlp")
+	if err := downloadFile(snapshotBase+"/api/snapshot/latest/chain.rlp", chainFile); err != nil {
+		return fmt.Errorf("download: %w", err)
+	}
+
+	gethBin := gethBinPath(filepath.Join(dataDir, "bin"))
+	gethDataDir := filepath.Join(dataDir, "geth-data")
+	fmt.Printf("  Importing into geth (may take a moment)...\n")
+	if err := runGethImportCmd(gethBin, gethDataDir, chainFile); err != nil {
+		os.Remove(chainFile)
+		return fmt.Errorf("geth import: %w", err)
+	}
+	os.Remove(chainFile)
+
+	cometHome := filepath.Join(dataDir, "comet")
+	if err := applyFastSync(cometHome, int64(meta.Height), meta.Hash); err != nil {
+		return fmt.Errorf("apply fast-sync: %w", err)
+	}
+
+	fmt.Printf("  Snapshot applied — starting from block %d.\n\n", meta.Height)
+	return nil
 }
 
 func resolveChainID(dataDir string) string {
