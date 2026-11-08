@@ -352,17 +352,26 @@
           <div class="step">
             <div class="step-num">1</div>
             <div class="step-body">
-              <h4>Download <code class="t-mono lime-text">chakram-node</code></h4>
+              <h4>Download <code class="t-mono lime-text">chakram-node</code> <span id="dl-version" style="font-size:0.75rem;color:var(--muted);font-weight:400;"></span></h4>
               <p>One file, no installer. Pick your platform:</p>
               <div class="run-platform-links">
-                <a href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
+                <a id="dl-linux-amd64" href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
                   🐧 Linux (amd64)
                 </a>
-                <a href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
+                <a id="dl-linux-arm64" href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
+                  🐧 Linux (arm64)
+                </a>
+                <a id="dl-darwin-arm64" href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
                   🍎 macOS (Apple Silicon)
                 </a>
-                <a href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
+                <a id="dl-darwin-amd64" href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
+                  🍎 macOS (Intel)
+                </a>
+                <a id="dl-windows-amd64" href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn">
                   🪟 Windows (x64)
+                </a>
+                <a id="dl-checksums" href="https://github.com/Chakram-Labs/chakram/releases/latest" target="_blank" rel="noopener" class="platform-btn" style="opacity:0.6;font-size:0.8rem;">
+                  🔐 checksums.txt
                 </a>
               </div>
             </div>
@@ -423,7 +432,7 @@
           </div>
 
           <div class="validator-cta-box" style="margin-top:var(--space-4);">
-            <a href="https://github.com/Chakram-Labs/chakram/releases/latest"
+            <a id="dl-cta" href="https://github.com/Chakram-Labs/chakram/releases/latest"
                target="_blank" rel="noopener" class="btn btn-primary" style="margin-top:var(--space-4);">
               Download chakram-node →
             </a>

@@ -82,6 +82,54 @@ async function fetchStats() {
 fetchStats();
 setInterval(fetchStats, 5000);
 
+/* ── Download links from GCS ── */
+(async function () {
+  const LATEST_URL = 'https://storage.googleapis.com/chakram-bucket/releases/latest.json';
+  const GITHUB_FALLBACK = 'https://github.com/Chakram-Labs/chakram/releases/latest';
+
+  const map = {
+    'dl-linux-amd64':   r => r.linux_amd64,
+    'dl-linux-arm64':   r => r.linux_arm64,
+    'dl-darwin-arm64':  r => r.darwin_arm64,
+    'dl-darwin-amd64':  r => r.darwin_amd64,
+    'dl-windows-amd64': r => r.windows_amd64,
+    'dl-checksums':     r => r.checksums,
+  };
+
+  try {
+    const res = await fetch(LATEST_URL, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) throw new Error('status ' + res.status);
+    const rel = await res.json();
+
+    // Version badge
+    const badge = document.getElementById('dl-version');
+    if (badge && rel.version) badge.textContent = rel.version;
+
+    // Update each button href
+    for (const [id, getter] of Object.entries(map)) {
+      const el = document.getElementById(id);
+      const url = getter(rel);
+      if (el && url) {
+        el.href = url;
+        el.removeAttribute('target');
+        el.setAttribute('download', '');
+      }
+    }
+
+    // CTA button at bottom of section
+    const cta = document.getElementById('dl-cta');
+    if (cta && rel.linux_amd64) {
+      cta.href = rel.linux_amd64;
+      cta.removeAttribute('target');
+      cta.setAttribute('download', '');
+      if (rel.version) cta.textContent = `Download chakram-node ${rel.version} →`;
+    }
+  } catch {
+    // GCS unreachable — keep existing GitHub fallback hrefs, nothing to do
+    console.info('chakram: falling back to GitHub releases for download links');
+  }
+})();
+
 /* ── MetaMask: Add Chakram network ── */
 async function addNetwork() {
   if (!window.ethereum) {

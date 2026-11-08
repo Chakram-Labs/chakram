@@ -26,6 +26,10 @@ coverage.html
 docker/.env
 docker/secrets/
 
+# GCP service account key — never commit credentials
+service-account.json
+*.json.key
+
 # macOS
 .DS_Store
 
