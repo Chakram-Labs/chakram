@@ -115,10 +115,11 @@ type ErrorResponse struct {
 
 // NodeInfoResponse is returned by GET /api/node-info.
 type NodeInfoResponse struct {
-	CometPeer       string `json:"comet_peer"`               // nodeID@host:26656
-	GethEnode       string `json:"geth_enode"`               // enode://pubkey@host:30303
-	GenesisURL      string `json:"genesis_url"`              // URL to download genesis files
+	CometPeer       string `json:"comet_peer"`                 // nodeID@host:26656
+	GethEnode       string `json:"geth_enode"`                 // enode://pubkey@host:30303
+	GenesisURL      string `json:"genesis_url"`                // URL to download genesis files
 	StakingContract string `json:"staking_contract,omitempty"` // StakingRegistry contract address
+	ValidatorPubkey string `json:"validator_pubkey,omitempty"` // Ed25519 pubkey (base64) from priv_validator_key.json
 }
 
 // GenesisResponse is returned by GET /api/genesis.

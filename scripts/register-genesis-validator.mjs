@@ -5,21 +5,22 @@
 //
 // Usage:
 //   node register-genesis-validator.mjs
+//
+// The Ed25519 pubkey is fetched live from the genesis node's CometBFT RPC
+// (/validators) so it always uses the current key regardless of chain restarts.
 
 import { ethers } from '/Users/anandhusatheesh/chakram3/web/node_modules/ethers/lib.esm/index.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const RPC_URL           = 'https://rpc.chakram.one';
+const EVM_RPC_URL       = 'https://rpc.chakram.one';
+const NODE_API_URL      = 'https://node.chakram.one'; // chakram-node dashboard API
 const STAKING_CONTRACT  = '0x532119646393a09c1CfA31FC16CC995917581647';
 
-// Hardhat #0 — owner of the StakingRegistry (has 1B CHK in genesis)
+// Owner of the StakingRegistry (has 1B CHK in genesis)
 const OWNER_PRIVATE_KEY = '0x660ccdb3b1bd27d0a7f8b1f0cb9da745bb9151ddec259a85515944162d2965d7';
 
-// The node's Ed25519 pubkey (base64 from priv_validator_key.json)
-const ED25519_PUBKEY_B64 = 'r6gMaNEXaf6FZ993LUdjbGS3U44Lck3z1MxrkyUXvgU=';
-
-// Where block rewards go — the generated EVM address (same as contract owner)
+// Where block rewards go
 const REWARD_ADDRESS = '0xdeF22dBC999aD395527205C90d7922357378CAe0';
 
 // ── ABI (minimal) ─────────────────────────────────────────────────────────────
@@ -32,9 +33,30 @@ const ABI = [
   'function validators(address) view returns (bytes32, address, uint256, bool, bool, bool, bool, uint16, uint256)',
 ];
 
+// ── Fetch current validator pubkey from CometBFT ──────────────────────────────
+
+async function fetchValidatorPubkey() {
+  const url = NODE_API_URL + '/api/node-info';
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+    const pubkey = data?.validator_pubkey;
+    if (!pubkey) throw new Error('validator_pubkey missing from node-info response');
+    console.log('Fetched validator pubkey from node-info:', pubkey);
+    return pubkey;
+  } catch (e) {
+    throw new Error(
+      `Could not fetch validator pubkey from ${url}: ${e.message}\n` +
+      `  Fallback: ssh chakram-node "python3 -c \\"import json; d=json.load(open('/home/anandhusatheesh/.chakram-node/comet/config/priv_validator_key.json')); print(d['pub_key']['value'])\\""`,
+    );
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const provider = new ethers.JsonRpcProvider(RPC_URL);
+const ED25519_PUBKEY_B64 = await fetchValidatorPubkey();
+
+const provider = new ethers.JsonRpcProvider(EVM_RPC_URL);
 const wallet   = new ethers.Wallet(OWNER_PRIVATE_KEY, provider);
 const contract = new ethers.Contract(STAKING_CONTRACT, ABI, wallet);
 

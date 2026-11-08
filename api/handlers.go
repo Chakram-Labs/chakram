@@ -770,7 +770,27 @@ func (s *Server) handleNodeInfo(w http.ResponseWriter, r *http.Request) {
 		GethEnode:       gethEnode,
 		GenesisURL:      genesisURL,
 		StakingContract: s.cfg.StakingContractAddr,
+		ValidatorPubkey: s.validatorPubkeyB64(),
 	})
+}
+
+// validatorPubkeyB64 reads the node's Ed25519 validator pubkey (base64) from
+// priv_validator_key.json. Returns "" if the file is missing or unreadable.
+func (s *Server) validatorPubkeyB64() string {
+	keyPath := filepath.Join(s.cfg.HomeDir, "config", "priv_validator_key.json")
+	data, err := os.ReadFile(keyPath)
+	if err != nil {
+		return ""
+	}
+	var key struct {
+		PubKey struct {
+			Value string `json:"value"`
+		} `json:"pub_key"`
+	}
+	if json.Unmarshal(data, &key) != nil {
+		return ""
+	}
+	return key.PubKey.Value
 }
 
 // p2pHost returns the configured P2P host, falling back to the request host.
