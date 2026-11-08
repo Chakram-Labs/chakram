@@ -48,14 +48,14 @@ function SearchBar() {
   }
 
   return (
-    <form onSubmit={handleSearch} className="flex items-center gap-2 mt-2">
-      <div className="relative flex-1">
-        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+    <form onSubmit={handleSearch} className="flex items-center">
+      <div className="relative w-full">
+        <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
         <input
           value={q}
           onChange={e => setQ(e.target.value)}
-          placeholder="Search block / tx hash / address"
-          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-gray-800 border border-white/5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-lime-400/40 font-mono"
+          placeholder="Search block / tx / address"
+          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[#1a1a1a] border border-white/8 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-lime-400/30 font-mono"
         />
       </div>
     </form>
@@ -64,37 +64,29 @@ function SearchBar() {
 
 export default function Layout() {
   const { pathname } = useLocation();
-  const { section, title } = getPageInfo(pathname);
+  const { section } = getPageInfo(pathname);
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-[#0a0a0a]">
 
-      {/* ── Floating rounded sidebar ── */}
-      <aside className={[
-        'fixed z-50 my-4 ml-4 h-[calc(100vh-32px)] w-72 rounded-xl',
-        'bg-gray-900 border border-white/5',
-        'overflow-hidden flex flex-col',
-        '-translate-x-96 xl:translate-x-0 transition-transform duration-300',
-      ].join(' ')}>
+      {/* Compact sidebar — 176px */}
+      <aside className="fixed z-50 my-4 ml-4 h-[calc(100vh-32px)] w-44 rounded-xl bg-[#111] border border-white/8 overflow-hidden flex flex-col">
 
         {/* Brand */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10 shrink-0">
+        <div className="flex items-center gap-2.5 px-4 py-4 border-b border-white/8 shrink-0">
           <img
             src="/chk-logo.png"
             alt="Chakram"
-            className="size-9 rounded-lg object-contain shrink-0"
+            className="size-7 rounded-md object-contain shrink-0"
           />
           <div>
-            <div className="text-sm font-bold tracking-widest text-white">CHAKRAM</div>
-            <div className="text-[11px] text-white/50 mt-0.5">Node Dashboard</div>
+            <div className="text-[11px] font-bold tracking-widest text-white">CHAKRAM</div>
+            <div className="text-[10px] text-white/35 mt-0.5">Node Dashboard</div>
           </div>
         </div>
 
-        {/* Nav items */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 min-h-0">
-          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-white/30">
-            Pages
-          </p>
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-3 px-2 min-h-0">
           <ul className="flex flex-col gap-0.5">
             {NAV.map(({ to, label, Icon }) => (
               <li key={to}>
@@ -102,14 +94,14 @@ export default function Layout() {
                   to={to}
                   end={to === '/'}
                   className={({ isActive }) => [
-                    'flex items-center gap-4 px-4 py-2.5 rounded-lg text-sm font-medium',
+                    'flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium',
                     'transition-all duration-150 no-underline',
                     isActive
-                      ? 'bg-gradient-to-tr from-lime-500 to-lime-400 text-gray-900 shadow-md shadow-lime-500/25'
-                      : 'text-white/60 hover:bg-white/8 hover:text-white',
+                      ? 'bg-lime-400 text-gray-900 font-semibold'
+                      : 'text-white/50 hover:bg-white/6 hover:text-white',
                   ].join(' ')}
                 >
-                  <Icon size={16} className="shrink-0" strokeWidth={1.75} />
+                  <Icon size={14} className="shrink-0" strokeWidth={1.75} />
                   {label}
                 </NavLink>
               </li>
@@ -117,33 +109,26 @@ export default function Layout() {
           </ul>
         </nav>
 
-        {/* Footer — version */}
-        <div className="shrink-0 px-6 py-4 border-t border-white/10">
-          <p className="text-[11px] text-white/30">Chakram v3 · devnet</p>
+        {/* Footer */}
+        <div className="shrink-0 px-4 py-3 border-t border-white/8">
+          <p className="text-[10px] text-white/25">Chakram v3 · devnet</p>
         </div>
       </aside>
 
-      {/* ── Content area ── */}
-      <div className="p-4 xl:ml-80">
+      {/* Content area — offset by sidebar width + gap */}
+      <div className="p-4 ml-48">
 
-        {/* Sticky top navbar with breadcrumbs + search */}
-        <nav className="bg-gray-900 rounded-xl sticky top-4 z-40 shadow-md shadow-black/20 py-3 px-6 mb-8 border border-white/5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-1 text-[11px] text-gray-500">
-                <span>dashboard</span>
-                <span>/</span>
-                <span className="text-gray-300 font-medium capitalize">{section}</span>
-              </div>
-              <h6 className="text-sm font-bold text-white mt-0.5">{title}</h6>
-            </div>
-            <div className="w-80 shrink-0">
-              <SearchBar />
-            </div>
+        {/* Slim top bar */}
+        <nav className="bg-[#111] rounded-xl sticky top-4 z-40 border border-white/8 mb-6 px-5 py-2.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[11px] text-gray-600">dashboard /</span>
+            <span className="text-[11px] font-semibold text-white capitalize">{section}</span>
+          </div>
+          <div className="w-72 shrink-0">
+            <SearchBar />
           </div>
         </nav>
 
-        {/* Page content */}
         <Outlet />
       </div>
     </div>

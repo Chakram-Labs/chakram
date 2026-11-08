@@ -11,13 +11,13 @@ import { ethers } from '/Users/anandhusatheesh/chakram3/web/node_modules/ethers/
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const RPC_URL           = 'https://rpc.chakram.one';
-const STAKING_CONTRACT  = '0x0eD064CA59AbCBe5f17202dAF4b23358608CF19b';
+const STAKING_CONTRACT  = '0x532119646393a09c1CfA31FC16CC995917581647';
 
 // Hardhat #0 — owner of the StakingRegistry (has 1B CHK in genesis)
 const OWNER_PRIVATE_KEY = '0x660ccdb3b1bd27d0a7f8b1f0cb9da745bb9151ddec259a85515944162d2965d7';
 
 // The node's Ed25519 pubkey (base64 from priv_validator_key.json)
-const ED25519_PUBKEY_B64 = 'l04y7fiXpgDTZGBmq4DNNrzgLpvJGs2AA0+tnuAOYl0=';
+const ED25519_PUBKEY_B64 = 'r6gMaNEXaf6FZ993LUdjbGS3U44Lck3z1MxrkyUXvgU=';
 
 // Where block rewards go — the generated EVM address (same as contract owner)
 const REWARD_ADDRESS = '0xdeF22dBC999aD395527205C90d7922357378CAe0';

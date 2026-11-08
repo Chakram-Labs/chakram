@@ -1,21 +1,30 @@
 import { type ReactNode } from 'react';
 import { type LucideIcon } from 'lucide-react';
 
-// ---- gradient palette ----
 export type GradColor = 'gray' | 'lime' | 'teal' | 'green' | 'red' | 'amber' | 'pink' | 'purple';
 
-const GRADIENTS: Record<GradColor, string> = {
-  gray:   'bg-gradient-to-tr from-gray-700 to-gray-600 shadow-gray-900/30',
-  lime:   'bg-gradient-to-tr from-lime-600 to-lime-400 shadow-lime-500/25',
-  teal:   'bg-gradient-to-tr from-teal-600 to-teal-400 shadow-teal-500/20',
-  green:  'bg-gradient-to-tr from-green-600 to-green-400 shadow-green-500/20',
-  red:    'bg-gradient-to-tr from-red-600 to-red-400 shadow-red-500/20',
-  amber:  'bg-gradient-to-tr from-amber-600 to-amber-400 shadow-amber-500/20',
-  pink:   'bg-gradient-to-tr from-pink-600 to-pink-400 shadow-pink-500/20',
-  purple: 'bg-gradient-to-tr from-purple-600 to-purple-400 shadow-purple-500/20',
+const ACCENT_BAR: Record<GradColor, string> = {
+  lime:   'bg-lime-400',
+  teal:   'bg-lime-400',
+  green:  'bg-green-400',
+  red:    'bg-red-400',
+  amber:  'bg-amber-400',
+  gray:   'bg-white/20',
+  pink:   'bg-lime-400',
+  purple: 'bg-white/20',
 };
 
-// ---- Floating-icon stat card (Material Tailwind pattern) ----
+const ICON_CLS: Record<GradColor, string> = {
+  lime:   'text-lime-400',
+  teal:   'text-lime-400',
+  green:  'text-green-400',
+  red:    'text-red-400',
+  amber:  'text-amber-400',
+  gray:   'text-gray-500',
+  pink:   'text-lime-400',
+  purple: 'text-gray-500',
+};
+
 export function StatCard({
   color = 'gray',
   icon: Icon,
@@ -30,32 +39,22 @@ export function StatCard({
   footer?: ReactNode;
 }) {
   return (
-    <div className="relative mt-6">
-      {/* card body first so icon (rendered after) stacks above it */}
-      <div className="rounded-xl border border-white/5 bg-gray-900 shadow-sm">
-        <div className="p-4 text-right">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-gray-400">
-            {title}
-          </p>
-          <div className="mt-1 text-2xl font-bold tabular-nums text-slate-700 dark:text-white">
-            {value}
-          </div>
-        </div>
-        {footer !== undefined && (
-          <div className="border-t border-slate-50 dark:border-gray-700/50 px-4 py-3">
-            {footer}
-          </div>
-        )}
+    <div className="relative rounded-xl bg-[#111] border border-white/8 overflow-hidden flex items-center gap-4 pl-5 pr-5 py-4">
+      <span className={`absolute left-0 top-0 h-full w-[3px] ${ACCENT_BAR[color]}`} />
+      <div className="shrink-0 size-9 rounded-lg bg-white/5 grid place-items-center">
+        <Icon size={15} className={ICON_CLS[color]} strokeWidth={1.75} />
       </div>
-      {/* floating gradient icon — rendered after card so it paints on top */}
-      <div className={`absolute left-4 -top-6 h-12 w-12 rounded-xl grid place-items-center shadow-lg ${GRADIENTS[color]}`}>
-        <Icon className="h-6 w-6 text-white" strokeWidth={2} />
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">{title}</p>
+        <div className="mt-0.5 text-xl font-bold tabular-nums text-white truncate">{value}</div>
       </div>
+      {footer !== undefined && (
+        <div className="shrink-0">{footer}</div>
+      )}
     </div>
   );
 }
 
-// ---- Gradient-header card for tables ----
 export function GradCard({
   title,
   subtitle,
@@ -68,22 +67,21 @@ export function GradCard({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-xl overflow-hidden border border-slate-100 dark:border-gray-700 shadow-sm">
-      <div className="bg-gradient-to-tr from-gray-900 to-gray-800 px-6 py-5 flex items-start justify-between gap-4">
+    <div className="rounded-xl overflow-hidden border border-white/8">
+      <div className="bg-[#161616] px-6 py-4 flex items-center justify-between gap-4 border-b border-white/8">
         <div>
           <h6 className="text-sm font-semibold text-white">{title}</h6>
-          {subtitle && <p className="mt-0.5 text-[11px] text-white/50">{subtitle}</p>}
+          {subtitle && <p className="mt-0.5 text-[11px] text-gray-500">{subtitle}</p>}
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
-      <div className="bg-white dark:bg-gray-800 overflow-x-auto px-0 pt-0 pb-2">
+      <div className="bg-[#111] overflow-x-auto">
         {children}
       </div>
     </div>
   );
 }
 
-// ---- Simple sectioned card ----
 export function Card({
   title,
   subtitle,
@@ -96,11 +94,11 @@ export function Card({
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-white/5 bg-gray-900 shadow-sm ${className}`}>
+    <div className={`rounded-xl border border-white/8 bg-[#111] ${className}`}>
       {title && (
-        <div className="px-6 py-4 border-b border-slate-50 dark:border-gray-700">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-white">{title}</h2>
-          {subtitle && <p className="mt-0.5 text-xs text-slate-500 dark:text-gray-400">{subtitle}</p>}
+        <div className="px-6 py-4 border-b border-white/8">
+          <h2 className="text-sm font-semibold text-white">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
         </div>
       )}
       {children}
@@ -108,17 +106,16 @@ export function Card({
   );
 }
 
-// ---- Chip / badge ----
 export type ChipColor = 'green' | 'red' | 'amber' | 'lime' | 'gray' | 'purple' | 'teal';
 
 const CHIP_CLS: Record<ChipColor, string> = {
-  green:  'bg-gradient-to-tr from-green-600 to-green-500 text-white',
-  red:    'bg-gradient-to-tr from-red-600 to-red-400 text-white',
-  amber:  'bg-gradient-to-tr from-amber-500 to-amber-400 text-white',
-  lime:   'bg-gradient-to-tr from-lime-500 to-lime-400 text-gray-900',
-  gray:   'bg-gray-700 text-gray-300',
-  purple: 'bg-gradient-to-tr from-purple-600 to-purple-400 text-white',
-  teal:   'bg-gradient-to-tr from-teal-600 to-teal-400 text-white',
+  green:  'border border-green-500/30 text-green-400 bg-green-500/10',
+  red:    'border border-red-500/30 text-red-400 bg-red-500/10',
+  amber:  'border border-amber-400/30 text-amber-400 bg-amber-400/10',
+  lime:   'border border-lime-400/30 text-lime-400 bg-lime-400/10',
+  gray:   'border border-white/10 text-gray-400 bg-white/5',
+  purple: 'border border-white/10 text-gray-400 bg-white/5',
+  teal:   'border border-lime-400/30 text-lime-400 bg-lime-400/10',
 };
 
 export function Chip({

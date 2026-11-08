@@ -4,8 +4,6 @@ import { GradCard, Card, Chip, StatCard } from '../components/ui';
 import { ShieldCheck, ShieldOff, Clock, Coins, Users, Copy, Check } from 'lucide-react';
 import { base64ToPubKeyHex, weiToChkDisplay } from '../lib/staking';
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
 function weiToEth(wei: string): string {
   try { return (Number(BigInt(wei)) / 1e18).toString(); } catch { return '0'; }
 }
@@ -27,8 +25,6 @@ function extractError(err: unknown): string {
   return String(err);
 }
 
-// ─── UI atoms ────────────────────────────────────────────────────────────────
-
 function StatusBadge({ v }: { v: StakingValidator }) {
   if (v.jailed)                    return <Chip color="red"><ShieldOff size={9} strokeWidth={2.5} /> Jailed</Chip>;
   if (v.unbonding_unlock_time > 0) return <Chip color="amber"><Clock size={9} strokeWidth={2.5} /> Unbonding</Chip>;
@@ -41,7 +37,7 @@ function CopyBtn({ text }: { text: string }) {
   return (
     <button
       onClick={() => navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}
-      className="ml-1 inline-flex items-center rounded p-0.5 text-gray-500 hover:text-gray-200 transition-colors"
+      className="ml-1 inline-flex items-center rounded p-0.5 text-gray-600 hover:text-gray-200 transition-colors"
     >
       {copied ? <Check size={11} strokeWidth={2.5} className="text-lime-400" /> : <Copy size={11} strokeWidth={2} />}
     </button>
@@ -68,12 +64,10 @@ function TxResult({ state, hash, msg }: { state: TxState; hash?: string; msg?: s
   return <p className="mt-2 text-xs text-red-400 break-all">{msg}</p>;
 }
 
-const iCls = 'w-full appearance-none rounded-lg border border-white/10 bg-gray-900 px-3 py-2 text-sm text-white placeholder:text-gray-600 font-mono focus:outline-none focus:ring-2 focus:ring-lime-500/40';
-const btnLime  = 'inline-flex items-center gap-2 rounded-lg bg-lime-400 px-4 py-2 text-sm font-semibold text-gray-900 shadow-md shadow-lime-500/20 hover:bg-lime-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
-const btnAmber = 'inline-flex items-center gap-2 rounded-lg bg-gradient-to-tr from-amber-500 to-amber-400 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-amber-500/20 hover:shadow-amber-500/40 transition-shadow disabled:opacity-40 disabled:cursor-not-allowed';
-const btnRed   = 'inline-flex items-center gap-2 rounded-lg bg-gradient-to-tr from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-red-500/20 hover:shadow-red-500/40 transition-shadow disabled:opacity-40 disabled:cursor-not-allowed';
-
-// ─── Node wallet bar ──────────────────────────────────────────────────────────
+const iCls = 'w-full appearance-none rounded-lg border border-white/8 bg-[#161616] px-3 py-2 text-sm text-white placeholder:text-gray-600 font-mono focus:outline-none focus:ring-1 focus:ring-lime-400/30';
+const btnLime  = 'inline-flex items-center gap-2 rounded-lg bg-lime-400 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-lime-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+const btnAmber = 'inline-flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-400 hover:bg-amber-400/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+const btnRed   = 'inline-flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
 function NodeWalletBar({ wallet }: { wallet: NodeWalletResponse | null }) {
   if (!wallet) return null;
@@ -85,7 +79,7 @@ function NodeWalletBar({ wallet }: { wallet: NodeWalletResponse | null }) {
     );
   }
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-lime-500/20 bg-lime-500/5">
+    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-lime-400/20 bg-lime-400/5">
       <span className="size-2 rounded-full bg-lime-400" />
       <div className="flex flex-col">
         <span className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">Node EVM Wallet</span>
@@ -95,8 +89,6 @@ function NodeWalletBar({ wallet }: { wallet: NodeWalletResponse | null }) {
     </div>
   );
 }
-
-// ─── Validator panel ──────────────────────────────────────────────────────────
 
 function ValidatorPanel({ contractAddr, minStakeWei, validators, nodeWallet, onRefresh }: {
   contractAddr?: string;
@@ -126,9 +118,7 @@ function ValidatorPanel({ contractAddr, minStakeWei, validators, nodeWallet, onR
   }, []);
 
   useEffect(() => {
-    if (!stakeAmt && minStakeWei) {
-      setStakeAmt(weiToEth(minStakeWei));
-    }
+    if (!stakeAmt && minStakeWei) setStakeAmt(weiToEth(minStakeWei));
   }, [minStakeWei]);
 
   useEffect(() => {
@@ -152,7 +142,6 @@ function ValidatorPanel({ contractAddr, minStakeWei, validators, nodeWallet, onR
     if (!contractAddr || !nodeAddress) return;
     setRegState('pending'); setRegHash(''); setRegErr('');
     try {
-      // convert ETH → wei: split on decimal to avoid float precision loss
       let stakeWei: string | undefined;
       if (stakeAmt.trim()) {
         const [whole, frac = ''] = stakeAmt.trim().split('.');
@@ -198,7 +187,7 @@ function ValidatorPanel({ contractAddr, minStakeWei, validators, nodeWallet, onR
         )}
 
         {myV && (
-          <div className="rounded-lg bg-gray-900 border border-white/8 px-4 py-3">
+          <div className="rounded-lg bg-[#161616] border border-white/8 px-4 py-3">
             <p className="text-[11px] font-bold uppercase text-gray-500 mb-2">Your Registration</p>
             <div className="flex flex-wrap items-center gap-3">
               <StatusBadge v={myV} />
@@ -218,7 +207,7 @@ function ValidatorPanel({ contractAddr, minStakeWei, validators, nodeWallet, onR
             <p className="text-xs font-semibold text-white mb-1">Register as Validator</p>
             <p className="text-[11px] text-gray-500 mb-4">
               The chain owner must whitelist your EVM address first.
-              Run <code className="font-mono bg-gray-900 px-1 rounded">contracts/whitelist.py --address {nodeAddress}</code> on the owner's machine.
+              Run <code className="font-mono bg-[#161616] px-1 rounded">contracts/whitelist.py --address {nodeAddress}</code> on the owner's machine.
             </p>
             <form onSubmit={doRegister} className="space-y-3">
               <div>
@@ -285,8 +274,6 @@ function ValidatorPanel({ contractAddr, minStakeWei, validators, nodeWallet, onR
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-
 export default function Staking() {
   const [data,       setData]       = useState<StakingResponse | null>(null);
   const [nodeWallet, setNodeWallet] = useState<NodeWalletResponse | null>(null);
@@ -306,14 +293,14 @@ export default function Staking() {
 
   if (err && !data) return <p className="text-sm text-red-400">{err}</p>;
   if (!data) return (
-    <div className="flex items-center gap-2 text-sm text-gray-400">
+    <div className="flex items-center gap-2 text-sm text-gray-500">
       <span className="size-1.5 rounded-full bg-lime-400 animate-pulse" />Loading…
     </div>
   );
 
   if (!data.enabled) {
     return (
-      <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-6 py-5">
+      <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 px-6 py-5">
         <p className="text-sm font-semibold text-amber-400">PoA Mode</p>
         <p className="mt-1 text-sm text-amber-400/80">
           No staking contract configured. Set <code className="font-mono text-xs">CHAKRAM_STAKING_CONTRACT</code> to activate on-chain staking.
@@ -326,20 +313,20 @@ export default function Staking() {
   const totalStakeWei = data.validators.reduce((acc, v) => acc + BigInt(v.stake || '0'), 0n);
 
   return (
-    <div className="space-y-6 mt-10">
+    <div className="space-y-6 mt-6">
 
-      <div className="grid gap-y-10 gap-x-6 md:grid-cols-2 xl:grid-cols-3 mb-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <StatCard color="lime" icon={Users} title="Active Validators" value={activeCount}
-          footer={<span className="text-[11px] text-gray-400">{data.validators.length} registered total</span>} />
-        <StatCard color="teal" icon={Coins} title="Total Staked" value={weiToChkDisplay(totalStakeWei.toString())}
-          footer={<span className="text-[11px] text-gray-400">min stake: {weiToChkDisplay(data.min_stake ?? '0')}</span>} />
-        <StatCard color="lime" icon={Clock} title="Unbonding Period" value={secondsToHuman(data.unbonding_period ?? 0)}
-          footer={<span className="text-[11px] text-gray-400">after startUnbonding()</span>} />
+          footer={<span className="text-[11px] text-gray-500">{data.validators.length} registered total</span>} />
+        <StatCard color="lime" icon={Coins} title="Total Staked" value={weiToChkDisplay(totalStakeWei.toString())}
+          footer={<span className="text-[11px] text-gray-500">min stake: {weiToChkDisplay(data.min_stake ?? '0')}</span>} />
+        <StatCard color="amber" icon={Clock} title="Unbonding Period" value={secondsToHuman(data.unbonding_period ?? 0)}
+          footer={<span className="text-[11px] text-gray-500">after startUnbonding()</span>} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="rounded-xl border border-white/5 bg-gray-900 overflow-hidden">
-          <div className="bg-gray-800 px-6 py-5 border-b border-white/5">
+        <div className="rounded-xl border border-white/8 bg-[#111] overflow-hidden">
+          <div className="bg-[#161616] px-6 py-4 border-b border-white/8">
             <h6 className="text-sm font-semibold text-white">Contract</h6>
             <p className="mt-0.5 text-[11px] text-gray-500">StakingRegistry.sol on-chain state</p>
           </div>
@@ -365,14 +352,14 @@ export default function Staking() {
                   <tr>
                     {['EVM Address', 'Stake', 'Status', 'Power', 'Reward Address'].map(h => (
                       <th key={h} className="border-b border-white/5 py-3 px-4 text-left">
-                        <span className="text-[11px] font-bold uppercase text-gray-500">{h}</span>
+                        <span className="text-[11px] font-bold uppercase text-gray-600">{h}</span>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {data.validators.map((v, i) => (
-                    <tr key={v.evm_addr} className="hover:bg-white/3 transition-colors">
+                    <tr key={v.evm_addr} className="hover:bg-white/4 transition-colors">
                       <td className={`py-3 px-4 ${i < data.validators.length - 1 ? 'border-b border-white/5' : ''}`}>
                         <span className="font-mono text-xs text-lime-400">{trunc(v.evm_addr, 8)}</span>
                       </td>
@@ -386,7 +373,7 @@ export default function Staking() {
                         <span className="text-sm font-bold tabular-nums text-lime-400">{v.voting_power}</span>
                       </td>
                       <td className={`py-3 px-4 ${i < data.validators.length - 1 ? 'border-b border-white/5' : ''}`}>
-                        <span className="font-mono text-xs text-gray-400">{trunc(v.reward_addr, 8)}</span>
+                        <span className="font-mono text-xs text-gray-500">{trunc(v.reward_addr, 8)}</span>
                       </td>
                     </tr>
                   ))}

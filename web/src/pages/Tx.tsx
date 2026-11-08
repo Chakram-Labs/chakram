@@ -23,19 +23,16 @@ export default function Tx() {
 
   if (err) return (
     <div className="space-y-4">
-      <Link
-        to="/blocks"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white transition-colors"
-      >
+      <Link to="/blocks" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-white transition-colors">
         <ArrowLeft size={14} strokeWidth={2} /> Blocks
       </Link>
-      <p className="text-sm text-red-600 dark:text-red-400">Transaction not found: {err}</p>
+      <p className="text-sm text-red-400">Transaction not found: {err}</p>
     </div>
   );
 
   if (!data) return (
-    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-gray-400">
-      <span className="size-1.5 rounded-full bg-indigo-500 animate-pulse" />
+    <div className="flex items-center gap-2 text-sm text-gray-500">
+      <span className="size-1.5 rounded-full bg-lime-400 animate-pulse" />
       Loading…
     </div>
   );
@@ -62,52 +59,52 @@ export default function Tx() {
     <div className="space-y-6">
       <Link
         to={`/block/${data.block_height}`}
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-white transition-colors"
       >
         <ArrowLeft size={14} strokeWidth={2} />
         Block #{data.block_height}
       </Link>
 
-      <div className="rounded-xl overflow-hidden border border-slate-100 dark:border-gray-700 shadow-sm">
-        <div className="bg-gradient-to-tr from-gray-900 to-gray-800 px-6 py-5 flex items-center justify-between">
+      <div className="rounded-xl overflow-hidden border border-white/8">
+        <div className="bg-[#161616] px-6 py-4 border-b border-white/8 flex items-center justify-between">
           <h6 className="text-sm font-semibold text-white">Transaction Details</h6>
           <Chip color={st.color}>
             <st.Icon size={9} strokeWidth={2.5} />
             {data.status}
           </Chip>
         </div>
-        <div className="bg-white dark:bg-gray-800 overflow-x-auto px-0 pt-0 pb-2">
+        <div className="bg-[#111] overflow-x-auto">
           <table className="w-full table-auto">
             <tbody>
               {rows.map(([label, value, mono], i, arr) => (
                 <tr key={label}>
-                  <td className={`py-3 px-5 w-32 ${i < arr.length - 1 ? 'border-b border-slate-50 dark:border-gray-700' : ''}`}>
-                    <span className="text-[11px] font-bold uppercase text-slate-400 dark:text-gray-500">{label}</span>
+                  <td className={`py-3 px-5 w-32 ${i < arr.length - 1 ? 'border-b border-white/5' : ''}`}>
+                    <span className="text-[11px] font-bold uppercase text-gray-500">{label}</span>
                   </td>
-                  <td className={`py-3 px-5 ${i < arr.length - 1 ? 'border-b border-slate-50 dark:border-gray-700' : ''}`}>
+                  <td className={`py-3 px-5 ${i < arr.length - 1 ? 'border-b border-white/5' : ''}`}>
                     {label === 'Block' ? (
                       <Link
                         to={`/block/${data.block_height}`}
-                        className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline tabular-nums"
+                        className="text-sm font-semibold text-lime-400 hover:text-lime-300 tabular-nums"
                       >
                         {value}
                       </Link>
                     ) : label === 'From' ? (
                       <Link
                         to={`/wallet?addr=${data.from}`}
-                        className="font-mono text-xs text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+                        className="font-mono text-xs text-lime-400 hover:text-lime-300 break-all"
                       >
                         {value}
                       </Link>
                     ) : label === 'To' && data.to ? (
                       <Link
                         to={`/wallet?addr=${data.to}`}
-                        className="font-mono text-xs text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+                        className="font-mono text-xs text-lime-400 hover:text-lime-300 break-all"
                       >
                         {value}
                       </Link>
                     ) : (
-                      <span className={`text-slate-700 dark:text-white break-all ${mono ? 'font-mono text-xs' : 'text-sm font-medium'}`}>
+                      <span className={`text-white break-all ${mono ? 'font-mono text-xs' : 'text-sm font-medium'}`}>
                         {value}
                       </span>
                     )}

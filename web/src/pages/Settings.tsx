@@ -56,7 +56,7 @@ export default function Settings() {
   }, []);
 
   return (
-    <div className="space-y-6 max-w-2xl mt-10">
+    <div className="space-y-6 max-w-2xl mt-6">
       {IS_LOCAL && (
         <div className="rounded-xl border border-lime-400/20 bg-lime-400/5 px-5 py-4 flex items-start gap-3">
           <span className="text-lime-400 text-lg leading-none mt-0.5">●</span>
@@ -69,13 +69,14 @@ export default function Settings() {
           </div>
         </div>
       )}
+
       <Card title="Network Info" subtitle="Chakram chain connection details">
         <dl>
-          <Row label="Network Name"   value="Chakram" />
-          <Row label="Chain ID"       value={String(CHAIN_ID)} />
-          <Row label="Currency"       value="CHK" />
-          <Row label="RPC URL"        value={GETH_RPC} mono />
-          <Row label="Explorer"       value={EXPLORER_URL} mono />
+          <Row label="Network Name" value="Chakram" />
+          <Row label="Chain ID"     value={String(CHAIN_ID)} />
+          <Row label="Currency"     value="CHK" />
+          <Row label="RPC URL"      value={GETH_RPC} mono />
+          <Row label="Explorer"     value={EXPLORER_URL} mono />
         </dl>
         <div className="px-6 py-5 border-t border-white/5">
           <p className="text-xs text-gray-500 mb-4">
@@ -100,7 +101,6 @@ export default function Settings() {
         <Card title="Run a Full Node" subtitle="Connect to this network — anyone can sync and become a validator">
           <div className="px-6 py-5 space-y-5">
 
-            {/* Feature highlights */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-lg border border-lime-400/15 bg-lime-400/5 px-4 py-3">
                 <p className="text-xs font-semibold text-lime-400 mb-1">Auto EVM wallet — no MetaMask needed</p>
@@ -110,48 +110,45 @@ export default function Settings() {
                   Export the key (localhost only) on the <strong className="text-white">Wallet</strong> page.
                 </p>
               </div>
-              <div className="rounded-lg border border-indigo-400/15 bg-indigo-400/5 px-4 py-3">
-                <p className="text-xs font-semibold text-indigo-300 mb-1">Fast sync via snapshot</p>
+              <div className="rounded-lg border border-lime-400/15 bg-lime-400/5 px-4 py-3">
+                <p className="text-xs font-semibold text-lime-400 mb-1">Fast sync via snapshot</p>
                 <p className="text-xs text-gray-400 leading-relaxed">
                   Skip syncing from genesis — download chain data from a seed node in minutes using{' '}
-                  <code className="text-indigo-300">chakram-node snapshot</code>, then start the node at snapshot height.
+                  <code className="text-lime-400">chakram-node snapshot</code>, then start the node at snapshot height.
                 </p>
               </div>
             </div>
 
-            {/* Option A: standalone binary */}
             <div className="border-t border-white/5 pt-4">
               <p className="text-xs font-semibold text-gray-300 mb-1">Option A — Single binary (Windows / Mac / Linux, no Docker)</p>
               <p className="text-xs text-gray-500 mb-2">
                 Download <code className="text-lime-400">chakram-node</code> for your platform, then run:
               </p>
-              <div className="rounded-lg bg-gray-900 border border-white/5 px-4 py-3 font-mono text-xs text-lime-400 flex items-start gap-3">
-                <Terminal size={13} className="shrink-0 mt-0.5 text-gray-500" />
+              <div className="rounded-lg bg-[#161616] border border-white/5 px-4 py-3 font-mono text-xs text-lime-400 flex items-start gap-3">
+                <Terminal size={13} className="shrink-0 mt-0.5 text-gray-600" />
                 <span>./chakram-node</span>
               </div>
               <p className="text-xs text-gray-500 mt-2">
                 geth is downloaded automatically on first run, genesis is fetched, and your browser opens to the status page.
               </p>
-              <p className="text-xs text-gray-500 mt-3 font-semibold text-gray-400">Optional: fast sync from snapshot</p>
+              <p className="text-xs font-semibold text-gray-400 mt-3">Optional: fast sync from snapshot</p>
               <p className="text-xs text-gray-500 mt-1 mb-2">
                 Run this once before starting to skip full history sync:
               </p>
-              <div className="rounded-lg bg-gray-900 border border-white/5 px-4 py-3 font-mono text-xs text-lime-400 flex items-start gap-3">
-                <Terminal size={13} className="shrink-0 mt-0.5 text-gray-500" />
+              <div className="rounded-lg bg-[#161616] border border-white/5 px-4 py-3 font-mono text-xs text-lime-400 flex items-start gap-3">
+                <Terminal size={13} className="shrink-0 mt-0.5 text-gray-600" />
                 <span className="whitespace-pre-wrap">{'./chakram-node snapshot\n./chakram-node'}</span>
               </div>
             </div>
 
-            {/* Option B: Docker */}
             <div className="border-t border-white/5 pt-4">
               <p className="text-xs font-semibold text-gray-300 mb-1">Option B — Docker</p>
-              <div className="rounded-lg bg-gray-900 border border-white/5 px-4 py-3 font-mono text-xs text-lime-400 flex items-start gap-3">
-                <Terminal size={13} className="shrink-0 mt-0.5 text-gray-500" />
+              <div className="rounded-lg bg-[#161616] border border-white/5 px-4 py-3 font-mono text-xs text-lime-400 flex items-start gap-3">
+                <Terminal size={13} className="shrink-0 mt-0.5 text-gray-600" />
                 <span>bash docker/setup.sh --mode fullnode --network-url https://node.chakram.one</span>
               </div>
             </div>
 
-            {/* Manual config */}
             <div className="border-t border-white/5 pt-4">
               <p className="text-xs text-gray-500 mb-2">Manual connection details:</p>
               <div className="rounded-xl overflow-hidden border border-white/5">

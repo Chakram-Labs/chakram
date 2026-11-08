@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-@variant dark (&:where(.dark, .dark *));
-
 @layer base {
   *, *::before, *::after {
     box-sizing: border-box;
@@ -16,15 +14,16 @@
   }
 
   body {
-    @apply bg-gray-950;
+    background: #0a0a0a;
+    color: #e5e5e5;
   }
 
   a { text-decoration: none; color: inherit; }
 
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { @apply bg-gray-700; border-radius: 999px; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-gray-600; }
+  ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
 
   .font-mono { font-variant-numeric: tabular-nums; }
 }
