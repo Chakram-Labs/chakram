@@ -43,7 +43,7 @@ export interface NodeWalletResponse {
 
 export interface StakingTxResponse { tx_hash: string; moniker_tx?: string; website_tx?: string; }
 
-export const CHAIN_ID = 11640;
+export const CHAIN_ID = 1164;
 
 // When served from localhost (a self-hosted chakram-node), point directly at
 // the local geth RPC — MetaMask and staking calls never leave the machine.

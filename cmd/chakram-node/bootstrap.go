@@ -97,7 +97,7 @@ func bootstrapGenesisNode(dataDir, ownerAddr string) error {
 		if err := os.WriteFile(gethGenesisPath, data, 0644); err != nil {
 			return fmt.Errorf("write geth genesis: %w", err)
 		}
-		fmt.Printf("  Created geth genesis (chainId 11640)\n")
+		fmt.Printf("  Created geth genesis (chainId 1164)\n")
 	}
 
 	if err := ensureGethInit(dataDir, false); err != nil {
@@ -109,15 +109,15 @@ func bootstrapGenesisNode(dataDir, ownerAddr string) error {
 }
 
 // buildGenesisNodeGethGenesis returns the geth genesis for a fresh Chakram chain.
-// ownerAddr is funded with 1B CHK so it can deploy StakingRegistry and register
-// the genesis validator. It must be checksummed or plain hex (with 0x prefix).
+// ownerAddr receives 100 CHK at genesis — bootstrap gas for deploying StakingRegistry.
+// All remaining CHK supply is emitted purely as block rewards.
 func buildGenesisNodeGethGenesis(ownerAddr string) map[string]any {
 	if ownerAddr == "" {
 		ownerAddr = "0xdeF22dBC999aD395527205C90d7922357378CAe0"
 	}
 	return map[string]any{
 		"config": map[string]any{
-			"chainId":                       11640,
+			"chainId":                       1164,
 			"homesteadBlock":                0,
 			"eip150Block":                   0,
 			"eip155Block":                   0,
@@ -142,9 +142,8 @@ func buildGenesisNodeGethGenesis(ownerAddr string) map[string]any {
 			},
 		},
 		"alloc": map[string]any{
-			// Owner address — funded so it can deploy contracts and register validators.
 			ownerAddr: map[string]any{
-				"balance": "1000000000000000000000000000", // 1B CHK
+				"balance": "100000000000000000000", // 100 CHK — bootstrap gas only
 			},
 		},
 		"difficulty": "0x0",

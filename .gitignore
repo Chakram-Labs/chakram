@@ -63,6 +63,7 @@ scripts/release-upload.sh
 scripts/deploy-explorer.sh
 scripts/test-network.sh
 scripts/fresh-chain.sh
+scripts/fresh-validators.sh
 scripts/node-package/
 
 # Devnet pre-generated validator keys — run scripts/devnet-4node/init-all.sh to generate locally

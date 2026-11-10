@@ -46,10 +46,10 @@ export default function Home() {
         <div className="relative z-10 px-8 py-10">
           <div className="flex items-center gap-2 mb-3">
             <span className="live-dot" />
-            <span className="text-[11px] font-bold uppercase tracking-widest text-lime">Testnet Live</span>
+            <span className="text-[11px] font-bold uppercase tracking-widest text-lime">Live</span>
           </div>
           <h1 className="font-display text-3xl font-extrabold text-white mb-1">Chakram Explorer</h1>
-          <p className="text-sm text-zinc-400">EVM blockchain · Chain ID 11640 · BFT finality</p>
+          <p className="text-sm text-zinc-400">EVM blockchain · Chain ID 1164 · BFT finality</p>
         </div>
       </div>
 

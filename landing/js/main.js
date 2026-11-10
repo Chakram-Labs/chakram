@@ -3,7 +3,7 @@
 const API_URL = 'https://node.chakram.one/api/status';
 
 const CHAKRAM_CHAIN = {
-  chainId: '0x2D78',  // 11640
+  chainId: '0x48C',  // 1164
   chainName: 'Chakram',
   nativeCurrency: { name: 'Chakram', symbol: 'CHK', decimals: 18 },
   rpcUrls: ['https://rpc.chakram.one'],
@@ -146,7 +146,7 @@ async function addNetwork(msgElId) {
   } catch (err) {
     if (err.code === 4001) return;
     if (err.code === -32601) {
-      alert('Your wallet does not support automatic network adding.\n\nAdd manually:\n  Network: Chakram\n  RPC: https://rpc.chakram.one\n  Chain ID: 11640\n  Symbol: CHK');
+      alert('Your wallet does not support automatic network adding.\n\nAdd manually:\n  Network: Chakram\n  RPC: https://rpc.chakram.one\n  Chain ID: 1164\n  Symbol: CHK');
       return;
     }
     if (msgEl) msgEl.textContent = "Wallet didn't add the network: " + (err?.message || 'request was declined.');

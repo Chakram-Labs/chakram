@@ -59,6 +59,7 @@ func startConsensus(ctx context.Context, cfg consensusCfg) error {
 		SnapshotInterval:    cfg.snapshotInterval,
 		ValidatorAddress:    validatorAddr,
 		StakingContractAddr: cfg.stakingContract,
+		ChakramLockerAddr:   cfg.lockerContract,
 	}, logger)
 	if err != nil {
 		return fmt.Errorf("create ABCI app: %w", err)
@@ -253,6 +254,7 @@ type consensusCfg struct {
 	peers           string
 	staticDir       string
 	stakingContract string
+	lockerContract  string
 	nodeKeyPath     string
 	p2pHost         string
 
@@ -331,6 +333,11 @@ func ensureChakramKeys(cometHome, chainID string) error {
 	// doesn't crash — the real genesis must be fetched first.
 	genesisPath := cmtCfg.BaseConfig.GenesisFile()
 	if !fileExists(genesisPath) {
+		// State file must exist for LoadFilePV (key may exist from a previous chain
+		// while data/ was wiped). Create a fresh one if it's missing.
+		if !fileExists(stateFile) {
+			_ = os.WriteFile(stateFile, []byte(`{"height":"0","round":0,"step":0}`), 0600)
+		}
 		pv := privval.LoadFilePV(keyFile, stateFile)
 		pubKey, err := pv.GetPubKey()
 		if err != nil {

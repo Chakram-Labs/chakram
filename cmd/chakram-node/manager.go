@@ -21,7 +21,7 @@ func startGeth(dataDir, jwtPath string, bootnodes []string) (*exec.Cmd, error) {
 
 	args := []string{
 		"--datadir", filepath.Join(dataDir, "geth-data"),
-		"--networkid", "11640",
+		"--networkid", "1164",
 		// Geth is a pure execution engine — block ordering comes from CometBFT
 		// via the Engine API. P2P discovery is enabled so validators gossip
 		// pending transactions to each other; whoever proposes the next block

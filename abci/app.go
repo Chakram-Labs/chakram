@@ -35,7 +35,8 @@ type Config struct {
 	Home                string // CometBFT home directory (app_state.json lives here)
 	RewardAddress       string // 0x-prefixed EVM address for withdrawal rewards
 	GethRPCURL          string // geth plain HTTP RPC URL (e.g. http://127.0.0.1:8545)
-	StakingContractAddr string // 0x-prefixed address of StakingRegistry.sol; empty = PoA mode
+	StakingContractAddr  string // 0x-prefixed address of StakingRegistry.sol; empty = PoA mode
+	ChakramLockerAddr   string // 0x-prefixed address of ChakramLocker.sol; empty = no locking
 
 	// ValidatorAddress is this node's CometBFT ed25519 address (hex, no 0x).
 	// When set, payload pre-building in Commit is skipped unless this node is
@@ -93,6 +94,22 @@ func NewChakramApp(eng EngineClient, cfg Config, log *slog.Logger) (*ChakramApp,
 	}
 	if state.ValidatorRewardAddrs == nil {
 		state.ValidatorRewardAddrs = make(map[string]string)
+	}
+	// Record the first block height that will use dual withdrawals (locker split).
+	// Once set, this never changes — it must stay fixed so withdrawal indices
+	// remain strictly monotonically increasing across the chain.
+	if cfg.ChakramLockerAddr != "" && state.LockerStartHeight == 0 {
+		if state.LastHeight == 0 {
+			state.LockerStartHeight = 1 // fresh chain: dual from block 1
+		} else {
+			state.LockerStartHeight = state.LastHeight + 1 // existing chain: dual from next block
+		}
+		if err := saveState(cfg.Home, state); err != nil {
+			return nil, fmt.Errorf("chakram-app: save locker start height: %w", err)
+		}
+		log.Info("chakram-locker: dual withdrawals enabled",
+			"locker", cfg.ChakramLockerAddr,
+			"start_height", state.LockerStartHeight)
 	}
 	var snapMgr *SnapshotManager
 	if cfg.GethBin != "" && cfg.GethDataDir != "" && cfg.SnapshotInterval > 0 {
@@ -307,13 +324,7 @@ func (app *ChakramApp) PrepareProposal(ctx context.Context, req *abcitypes.Reque
 			prevRandao = execHashToPrevRandao(app.state.LastExecHash)
 		}
 
-		rewardGwei := consensus.BlockRewardGwei(uint64(height))
-		withdrawal := engine.WithdrawalV1{
-			Index:          consensus.QuantityHex(consensus.WithdrawalIndex(uint64(height))),
-			ValidatorIndex: "0x0",
-			Address:        rewardAddr,
-			Amount:         consensus.QuantityHex(rewardGwei),
-		}
+		withdrawals := app.buildWithdrawals(uint64(height), rewardAddr)
 
 		headHash := bytesToHash(app.state.LastExecHash)
 		if headHash == zeroHash && app.cfg.GethRPCURL != "" {
@@ -330,7 +341,7 @@ func (app *ChakramApp) PrepareProposal(ctx context.Context, req *abcitypes.Reque
 			Timestamp:             consensus.QuantityHex(payloadTS),
 			PrevRandao:            prevRandao,
 			SuggestedFeeRecipient: rewardAddr,
-			Withdrawals:           []engine.WithdrawalV1{withdrawal},
+			Withdrawals:           withdrawals,
 			ParentBeaconBlockRoot: zeroHash,
 		}
 
@@ -604,6 +615,7 @@ func (app *ChakramApp) FinalizeBlock(ctx context.Context, req *abcitypes.Request
 		LastPayloadTime:      payloadTS,
 		ValidatorPubKeys:     newPubKeys,
 		ValidatorRewardAddrs: newRewardAddrs,
+		LockerStartHeight:    app.state.LockerStartHeight,
 	}
 	delete(app.pending, height)
 
@@ -730,13 +742,7 @@ func (app *ChakramApp) preBuildPayload(nextHeight int64, lastExecHash []byte, la
 		prevRandao = execHashToPrevRandao(lastExecHash)
 	}
 
-	rewardGwei := consensus.BlockRewardGwei(uint64(nextHeight))
-	withdrawal := engine.WithdrawalV1{
-		Index:          consensus.QuantityHex(consensus.WithdrawalIndex(uint64(nextHeight))),
-		ValidatorIndex: "0x0",
-		Address:        app.cfg.RewardAddress,
-		Amount:         consensus.QuantityHex(rewardGwei),
-	}
+	withdrawals := app.buildWithdrawals(uint64(nextHeight), app.cfg.RewardAddress)
 
 	headHash := bytesToHash(lastExecHash)
 	fcs := engine.ForkchoiceStateV1{
@@ -748,7 +754,7 @@ func (app *ChakramApp) preBuildPayload(nextHeight int64, lastExecHash []byte, la
 		Timestamp:             consensus.QuantityHex(payloadTS),
 		PrevRandao:            prevRandao,
 		SuggestedFeeRecipient: app.cfg.RewardAddress,
-		Withdrawals:           []engine.WithdrawalV1{withdrawal},
+		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: zeroHash,
 	}
 
@@ -1056,6 +1062,40 @@ func copyRewardAddrs(src map[string]string) map[string]string {
 		dst[k] = v
 	}
 	return dst
+}
+
+// buildWithdrawals returns the EIP-4895 withdrawal list for a block at height.
+// When ChakramLocker is configured and height >= LockerStartHeight, two
+// withdrawals are returned: 20 % to the validator's rewardAddr and 80 % to
+// ChakramLockerAddr. Otherwise a single full-reward withdrawal is returned.
+func (app *ChakramApp) buildWithdrawals(height uint64, rewardAddr string) []engine.WithdrawalV1 {
+	lockerAddr := app.cfg.ChakramLockerAddr
+	startH := app.state.LockerStartHeight
+	if lockerAddr == "" || startH == 0 || int64(height) < startH {
+		// Single withdrawal — no locker or block precedes the transition.
+		return []engine.WithdrawalV1{{
+			Index:          consensus.QuantityHex(consensus.WithdrawalIndex(height)),
+			ValidatorIndex: "0x0",
+			Address:        rewardAddr,
+			Amount:         consensus.QuantityHex(consensus.BlockRewardGwei(height)),
+		}}
+	}
+	// Dual withdrawal: 20 % immediate + 80 % locked.
+	validatorIdx, lockerIdx := consensus.LockerWithdrawalIndices(height, startH)
+	return []engine.WithdrawalV1{
+		{
+			Index:          consensus.QuantityHex(validatorIdx),
+			ValidatorIndex: "0x0",
+			Address:        rewardAddr,
+			Amount:         consensus.QuantityHex(consensus.BlockValidatorGwei(height)),
+		},
+		{
+			Index:          consensus.QuantityHex(lockerIdx),
+			ValidatorIndex: "0x0",
+			Address:        lockerAddr,
+			Amount:         consensus.QuantityHex(consensus.BlockLockGwei(height)),
+		},
+	}
 }
 
 // proposerRewardAddr returns the EVM reward address for the given CometBFT proposer

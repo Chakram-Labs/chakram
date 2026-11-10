@@ -25,8 +25,6 @@ if (!OWNER_PRIVATE_KEY) {
   process.exit(1);
 }
 
-const REWARD_ADDRESS = process.env.REWARD_ADDRESS || '0xdeF22dBC999aD395527205C90d7922357378CAe0';
-
 // ── ABI (minimal) ─────────────────────────────────────────────────────────────
 
 const ABI = [
@@ -62,6 +60,8 @@ const ED25519_PUBKEY_B64 = await fetchValidatorPubkey();
 
 const provider = new ethers.JsonRpcProvider(EVM_RPC_URL);
 const wallet   = new ethers.Wallet(OWNER_PRIVATE_KEY, provider);
+// Default to owner wallet if not set (fresh-chain.sh auto-detects the genesis node's EVM wallet)
+const REWARD_ADDRESS = process.env.REWARD_ADDRESS || wallet.address;
 const contract = new ethers.Contract(STAKING_CONTRACT, ABI, wallet);
 
 console.log('Owner address:', wallet.address);
@@ -81,6 +81,12 @@ console.log('Reward address:', REWARD_ADDRESS);
 const minStake = await contract.minStake();
 console.log('Min stake:', ethers.formatEther(minStake), 'CHK');
 
+const GENESIS_STAKE = ethers.parseEther('50'); // genesis validator stakes 50 CHK
+if (GENESIS_STAKE < minStake) {
+  console.error('ERROR: GENESIS_STAKE (50 CHK) is below contract minStake');
+  process.exit(1);
+}
+
 // Check if already active
 const alreadyActive = await contract.isActive(wallet.address);
 if (alreadyActive) {
@@ -96,8 +102,8 @@ await tx1.wait();
 console.log('  whitelisted');
 
 // Step 2: register
-console.log('\nStep 2: registering validator ...');
-const tx2 = await contract.register(pubKeyHex, REWARD_ADDRESS, { value: minStake });
+console.log('\nStep 2: registering validator with 50 CHK stake ...');
+const tx2 = await contract.register(pubKeyHex, REWARD_ADDRESS, { value: GENESIS_STAKE });
 console.log('  tx:', tx2.hash);
 await tx2.wait();
 console.log('  registered');

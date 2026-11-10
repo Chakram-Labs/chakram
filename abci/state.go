@@ -21,6 +21,12 @@ type AppState struct {
 	// CometBFT address (uppercase hex, no 0x) → EVM reward address (0x-prefixed lowercase).
 	// Used by PrepareProposal to route block rewards to the correct validator wallet.
 	ValidatorRewardAddrs map[string]string `json:"validator_reward_addrs,omitempty"`
+
+	// LockerStartHeight is the first block height at which dual withdrawals
+	// (20 % validator + 80 % ChakramLocker) are used. Zero means the locker
+	// is not yet configured. Set once when ChakramLockerAddr is first seen on
+	// startup; never changed after that.
+	LockerStartHeight int64 `json:"locker_start_height,omitempty"`
 }
 
 // stateFile returns the canonical path for the app state file.

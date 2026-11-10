@@ -35,8 +35,8 @@ func splitSeeds(s string) []string {
 // ── start ──────────────────────────────────────────────────────────────────
 
 func cmdStart(args []string) {
-	networkURL, dataDir, rewardAddr, seedsDNS, stakingContractFlag, p2pHostFlag, noBrowser,
-		snapshotInterval, fastSyncHeight, fastSyncHash, stateSyncRPCServers, genesisNode := startFlags(args)
+	networkURL, dataDir, rewardAddr, seedsDNS, stakingContractFlag, lockerContractFlag, p2pHostFlag, ownerAddrFlag,
+		noBrowser, snapshotInterval, fastSyncHeight, fastSyncHash, stateSyncRPCServers, genesisNode := startFlags(args)
 
 	fmt.Printf("Chakram Node\n")
 	fmt.Printf("  Data dir : %s\n", dataDir)
@@ -54,7 +54,11 @@ func cmdStart(args []string) {
 		rewardAddr = resolveRewardAddr(dataDir, rewardAddr)
 
 		fmt.Printf("==> Genesis Node Bootstrap\n")
-		if err := bootstrapGenesisNode(dataDir, rewardAddr); err != nil {
+		genesisOwner := ownerAddrFlag
+		if genesisOwner == "" {
+			genesisOwner = rewardAddr // fall back to node's reward wallet
+		}
+		if err := bootstrapGenesisNode(dataDir, genesisOwner); err != nil {
 			fatalf("genesis bootstrap failed: %v", err)
 		}
 		stakingContract = stakingContractFlag
@@ -101,6 +105,9 @@ func cmdStart(args []string) {
 		}
 		if stakingContract != "" {
 			fmt.Printf("  Staking contract : %s\n", stakingContract)
+		}
+		if lockerContractFlag != "" {
+			fmt.Printf("  Locker contract  : %s\n", lockerContractFlag)
 		}
 
 		// ── 3.5. Auto-recover stale data, then auto-snapshot ─────────────────
@@ -239,6 +246,7 @@ func cmdStart(args []string) {
 		rewardAddr:           rewardAddr,
 		peers:                strings.Join(seeds.CometPeers, ","),
 		stakingContract:      stakingContract,
+		lockerContract:       lockerContractFlag,
 		nodeKeyPath:          nodeKeyPath,
 		gethBin:              gethBin,
 		p2pHost:              p2pHostFlag,
@@ -265,7 +273,7 @@ func cmdStart(args []string) {
 // ── status ─────────────────────────────────────────────────────────────────
 
 func cmdStatus(args []string) {
-	_, dataDir, _, _, _, _, _, _, _, _, _, _ := startFlags(args)
+	_, dataDir, _, _, _, _, _, _, _, _, _, _, _, _ := startFlags(args)
 
 	pid, err := readPID(dataDir)
 	if err != nil {
@@ -308,7 +316,7 @@ func cmdStatus(args []string) {
 // ── stop ───────────────────────────────────────────────────────────────────
 
 func cmdStop(args []string) {
-	_, dataDir, _, _, _, _, _, _, _, _, _, _ := startFlags(args)
+	_, dataDir, _, _, _, _, _, _, _, _, _, _, _, _ := startFlags(args)
 
 	pid, err := readPID(dataDir)
 	if err != nil {
@@ -573,13 +581,13 @@ func resolveChainID(dataDir string) string {
 	genesisPath := filepath.Join(dataDir, "comet", "config", "genesis.json")
 	data, err := os.ReadFile(genesisPath)
 	if err != nil {
-		return "chakram-testnet-1"
+		return "chakram"
 	}
 	var g struct {
 		ChainID string `json:"chain_id"`
 	}
 	if err := json.Unmarshal(data, &g); err != nil || g.ChainID == "" {
-		return "chakram-testnet-1"
+		return "chakram"
 	}
 	return g.ChainID
 }

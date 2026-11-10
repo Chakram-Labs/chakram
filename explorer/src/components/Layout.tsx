@@ -73,7 +73,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Footer */}
       <footer className="border-t border-white/[0.06] py-6 text-center text-xs text-zinc-600">
-        Chakram Explorer · Chain ID 11640
+        Chakram Explorer · Chain ID 1164
       </footer>
     </div>
   )
