@@ -1,0 +1,128 @@
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.65rem 1.4rem;
+  border-radius: var(--r-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all var(--t-base);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--lime);
+  color: #000;
+  box-shadow: 0 0 24px rgba(163, 230, 53, 0.25);
+}
+.btn-primary:hover {
+  background: #b7f74a;
+  box-shadow: 0 0 32px rgba(163, 230, 53, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-outline {
+  border: 1px solid var(--border-hover);
+  color: var(--text-2);
+}
+.btn-outline:hover {
+  border-color: var(--lime-border);
+  color: var(--lime);
+  background: var(--lime-glow);
+}
+
+.btn-ghost {
+  color: var(--text-2);
+  padding-left: 0;
+  padding-right: 0;
+}
+.btn-ghost:hover { color: var(--text-1); }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  transition: border-color var(--t-base);
+}
+.card:hover { border-color: var(--border-hover); }
+
+.card-lime {
+  background: var(--lime-glow);
+  border: 1px solid var(--lime-border);
+  border-radius: var(--r-lg);
+}
+
+/* ── Chip / Tag ── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.chip-lime {
+  background: rgba(163, 230, 53, 0.12);
+  border: 1px solid rgba(163, 230, 53, 0.3);
+  color: var(--lime);
+}
+
+.chip-dot::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* ── Section label ── */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, var(--lime-border), transparent);
+  max-width: 120px;
+}
+
+/* ── Divider ── */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+/* ── Icon box ── */
+.icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r-md);
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.icon-box-lime {
+  background: var(--lime-glow);
+  border-color: var(--lime-border);
+}

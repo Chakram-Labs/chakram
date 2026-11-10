@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web UI
+        run: cd web && npm ci && npm run build
+
+      - name: Copy web dist for embedding
+        run: cp -r web/dist cmd/chakram-node/webdist
+
+      - name: Build chakram-node (all platforms)
+        env:
+          VERSION: ${{ github.ref_name }}
+          LDFLAGS: -X chakram/internal/version.Version=${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+
+          GOOS=linux   GOARCH=amd64 go build -tags webembed -ldflags "$LDFLAGS" \
+            -o dist/chakram-node-linux-amd64       ./cmd/chakram-node/
+
+          GOOS=linux   GOARCH=arm64 go build -tags webembed -ldflags "$LDFLAGS" \
+            -o dist/chakram-node-linux-arm64       ./cmd/chakram-node/
+
+          GOOS=darwin  GOARCH=amd64 go build -tags webembed -ldflags "$LDFLAGS" \
+            -o dist/chakram-node-darwin-amd64      ./cmd/chakram-node/
+
+          GOOS=darwin  GOARCH=arm64 go build -tags webembed -ldflags "$LDFLAGS" \
+            -o dist/chakram-node-darwin-arm64      ./cmd/chakram-node/
+
+          GOOS=windows GOARCH=amd64 go build -tags webembed -ldflags "$LDFLAGS" \
+            -o dist/chakram-node-windows-amd64.exe ./cmd/chakram-node/
+
+      - name: Build chakram server (linux/amd64 — for Docker deployments)
+        env:
+          LDFLAGS: -X chakram/internal/version.Version=${{ github.ref_name }}
+        run: |
+          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" \
+            -o dist/chakram-linux-amd64 ./cmd/chakram/
+
+      - name: Checksum all binaries
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Chakram ${{ github.ref_name }}"
+          body: |
+            ## Chakram ${{ github.ref_name }}
+
+            ### Download `chakram-node`
+
+            Run a full node on your machine — no Docker required.
+            Downloads geth automatically on first run, bootstraps from the network, opens a local dashboard.
+
+            | Platform | File |
+            |---|---|
+            | Linux x64 | `chakram-node-linux-amd64` |
+            | Linux ARM64 | `chakram-node-linux-arm64` |
+            | macOS Apple Silicon | `chakram-node-darwin-arm64` |
+            | macOS Intel | `chakram-node-darwin-amd64` |
+            | Windows x64 | `chakram-node-windows-amd64.exe` |
+
+            **Quick start:**
+            ```bash
+            # Linux / macOS
+            chmod +x chakram-node-* && ./chakram-node-linux-amd64
+
+            # Windows (PowerShell)
+            .\chakram-node-windows-amd64.exe
+            ```
+
+            Verify with `checksums.txt` (SHA-256).
+          files: |
+            dist/chakram-node-linux-amd64
+            dist/chakram-node-linux-arm64
+            dist/chakram-node-darwin-amd64
+            dist/chakram-node-darwin-arm64
+            dist/chakram-node-windows-amd64.exe
+            dist/chakram-linux-amd64
+            dist/checksums.txt
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

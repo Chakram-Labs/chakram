@@ -1,0 +1,433 @@
+# Chakram node docker-compose
+# Usage:
+#   dev mode (1 validator + faucet):
+#     docker compose --profile dev up -d
+#   localnet (4 validators):
+#     docker compose --profile localnet up -d
+#   fullnode (sync from existing network):
+#     docker compose --profile fullnode up -d
+#   with monitoring:
+#     docker compose --profile dev --profile monitoring up -d
+
+name: chakram
+
+x-geth-base: &geth-base
+  # Pin to geth v1.17.6 — update digest after verifying:
+  #   docker pull ethereum/client-go:v1.17.6
+  #   docker inspect ethereum/client-go:v1.17.6 --format='{{index .RepoDigests 0}}'
+  image: ethereum/client-go:v1.17.6
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- --header='Content-Type: application/json' --post-data='{\"jsonrpc\":\"2.0\",\"method\":\"net_listening\",\"params\":[],\"id\":1}' http://localhost:8545 2>/dev/null | grep -q '\"result\"'"]
+    interval: 5s
+    timeout: 5s
+    retries: 20
+    start_period: 15s
+
+x-chakram-base: &chakram-base
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  # Give CometBFT time to flush its WAL before SIGKILL
+  stop_grace_period: 30s
+
+services:
+
+  # ── dev mode: single validator ──────────────────────────────────────────────
+
+  geth-dev:
+    <<: *geth-base
+    profiles: [dev]
+    container_name: chakram-geth-dev
+    # corsdomain "*" allows the browser dashboard to call geth RPC directly (staking forms).
+    # For production, replace "*" with your dashboard origin (e.g. "https://chakram.example.com").
+    command: >
+      --datadir /data
+      --networkid ${CHAKRAM_NETWORK_ID:-11640}
+      --syncmode full
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api eth,net,web3,admin
+      --http.vhosts "geth-dev,localhost"
+      --http.corsdomain "*"
+      --authrpc.addr 0.0.0.0
+      --authrpc.port 8551
+      --authrpc.jwtsecret /run/secrets/jwt
+      --authrpc.vhosts "geth-dev,localhost"
+      --port 30303
+      --nodiscover
+      --gcmode archive
+      --history.transactions 0
+    volumes:
+      - geth-dev-data:/data
+    secrets:
+      - jwt
+    networks:
+      - chakram-net
+    ports:
+      - "127.0.0.1:8545:8545"
+      - "0.0.0.0:30303:30303/tcp"
+      - "0.0.0.0:30303:30303/udp"
+
+  chakram-dev:
+    <<: *chakram-base
+    profiles: [dev]
+    container_name: chakram-node-dev
+    depends_on:
+      geth-dev:
+        condition: service_healthy
+    environment:
+      CHAKRAM_MODE: dev
+      CHAKRAM_CHAIN_ID: ${CHAKRAM_CHAIN_ID:-chakram-devnet-1}
+      CHAKRAM_NETWORK_ID: ${CHAKRAM_NETWORK_ID:-11640}
+      CHAKRAM_REWARD_ADDRESS: ${CHAKRAM_REWARD_ADDRESS:-}
+      CHAKRAM_ENGINE_URL: http://geth-dev:8551
+      CHAKRAM_GETH_RPC: http://geth-dev:8545
+      CHAKRAM_P2P_PORT: "26656"
+      CHAKRAM_RPC_PORT: "26657"
+      CHAKRAM_API_ADDR: "0.0.0.0:8080"
+      CHAKRAM_API_DEV_MODE: "true"
+      CHAKRAM_FAUCET_ADDR: ${CHAKRAM_FAUCET_ADDR:-}
+      CHAKRAM_FAUCET_KEY: ${CHAKRAM_FAUCET_KEY:-}
+      CHAKRAM_JWT_PATH: /run/secrets/jwt
+      CHAKRAM_LOG_LEVEL: ${CHAKRAM_LOG_LEVEL:-info}
+      CHAKRAM_STAKING_CONTRACT: ${CHAKRAM_STAKING_CONTRACT:-}
+      CHAKRAM_P2P_HOST: ${CHAKRAM_P2P_HOST:-}
+    volumes:
+      - chakram-dev-data:/data/chakram
+      - genesis-dev:/genesis:ro
+    secrets:
+      - jwt
+    networks:
+      - chakram-net
+    ports:
+      - "8080:8080"
+      - "0.0.0.0:26657:26657"
+      - "26656:26656"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/api/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  # ── fullnode mode ────────────────────────────────────────────────────────────
+
+  geth-fullnode:
+    <<: *geth-base
+    profiles: [fullnode]
+    container_name: chakram-geth-fullnode
+    command: >
+      --datadir /data
+      --networkid ${CHAKRAM_NETWORK_ID:-11640}
+      --syncmode full
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api eth,net,web3
+      --http.vhosts "geth-fullnode,localhost"
+      --authrpc.addr 0.0.0.0
+      --authrpc.port 8551
+      --authrpc.jwtsecret /run/secrets/jwt
+      --authrpc.vhosts "geth-fullnode,localhost"
+      --port 30303
+      --bootnodes ${CHAKRAM_GETH_BOOTNODES:-}
+      --gcmode full
+      --history.transactions 0
+    volumes:
+      - geth-fullnode-data:/data
+    secrets:
+      - jwt
+    networks:
+      - chakram-net
+    ports:
+      - "127.0.0.1:8545:8545"
+      - "30303:30303"
+      - "30303:30303/udp"
+
+  chakram-fullnode:
+    <<: *chakram-base
+    profiles: [fullnode]
+    container_name: chakram-node-fullnode
+    depends_on:
+      geth-fullnode:
+        condition: service_healthy
+    environment:
+      CHAKRAM_MODE: fullnode
+      CHAKRAM_CHAIN_ID: ${CHAKRAM_CHAIN_ID:-chakram-devnet-1}
+      CHAKRAM_REWARD_ADDRESS: ${CHAKRAM_REWARD_ADDRESS:-0x0000000000000000000000000000000000000000}
+      CHAKRAM_ENGINE_URL: http://geth-fullnode:8551
+      CHAKRAM_GETH_RPC: http://geth-fullnode:8545
+      CHAKRAM_P2P_PORT: "26656"
+      CHAKRAM_RPC_PORT: "26657"
+      CHAKRAM_API_ADDR: "0.0.0.0:8080"
+      CHAKRAM_API_DEV_MODE: "false"
+      CHAKRAM_PEERS: ${CHAKRAM_PEERS:-}
+      CHAKRAM_JWT_PATH: /run/secrets/jwt
+      CHAKRAM_LOG_LEVEL: ${CHAKRAM_LOG_LEVEL:-info}
+    volumes:
+      - chakram-fullnode-data:/data/chakram
+    secrets:
+      - jwt
+    networks:
+      - chakram-net
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:26657:26657"
+      - "26656:26656"
+
+  # ── localnet mode: 4 validators ──────────────────────────────────────────────
+
+  geth-node0:
+    <<: *geth-base
+    profiles: [localnet]
+    container_name: chakram-geth-0
+    command: >
+      --datadir /data
+      --networkid ${CHAKRAM_NETWORK_ID:-11640}
+      --syncmode full
+      --http --http.addr 0.0.0.0 --http.port 8545
+      --http.api eth,net,web3,admin
+      --http.vhosts "geth-node0,localhost"
+      --authrpc.addr 0.0.0.0 --authrpc.port 8551
+      --authrpc.jwtsecret /run/secrets/jwt --authrpc.vhosts "geth-node0,localhost"
+      --port 30303 --maxpeers 3
+      --gcmode full
+    volumes:
+      - geth-node0-data:/data
+    secrets: [jwt]
+    networks: [chakram-net]
+
+  chakram-node0:
+    <<: *chakram-base
+    profiles: [localnet]
+    container_name: chakram-comet-0
+    depends_on:
+      geth-node0:
+        condition: service_healthy
+    environment:
+      CHAKRAM_CHAIN_ID: ${CHAKRAM_CHAIN_ID:-chakram-localnet-1}
+      CHAKRAM_REWARD_ADDRESS: ${CHAKRAM_NODE0_REWARD:-}
+      CHAKRAM_ENGINE_URL: http://geth-node0:8551
+      CHAKRAM_GETH_RPC: http://geth-node0:8545
+      CHAKRAM_P2P_PORT: "26656"
+      CHAKRAM_RPC_PORT: "26657"
+      CHAKRAM_API_ADDR: "0.0.0.0:8080"
+      CHAKRAM_PEERS: ${CHAKRAM_LOCALNET_PEERS:-}
+      CHAKRAM_JWT_PATH: /run/secrets/jwt
+      CHAKRAM_STAKING_CONTRACT: ${CHAKRAM_STAKING_CONTRACT:-}
+    volumes:
+      - chakram-node0-data:/data/chakram
+    secrets: [jwt]
+    networks: [chakram-net]
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:26657:26657"
+
+  geth-node1:
+    <<: *geth-base
+    profiles: [localnet]
+    container_name: chakram-geth-1
+    command: >
+      --datadir /data --networkid ${CHAKRAM_NETWORK_ID:-11640}
+      --syncmode full --http --http.addr 0.0.0.0 --http.port 8545
+      --http.api eth,net,web3,admin
+      --http.vhosts "geth-node1,localhost"
+      --authrpc.addr 0.0.0.0 --authrpc.port 8551
+      --authrpc.jwtsecret /run/secrets/jwt --authrpc.vhosts "geth-node1,localhost"
+      --port 30303 --maxpeers 3 --gcmode full
+    volumes: [geth-node1-data:/data]
+    secrets: [jwt]
+    networks: [chakram-net]
+
+  chakram-node1:
+    <<: *chakram-base
+    profiles: [localnet]
+    container_name: chakram-comet-1
+    depends_on:
+      geth-node1:
+        condition: service_healthy
+    environment:
+      CHAKRAM_CHAIN_ID: ${CHAKRAM_CHAIN_ID:-chakram-localnet-1}
+      CHAKRAM_REWARD_ADDRESS: ${CHAKRAM_NODE1_REWARD:-}
+      CHAKRAM_ENGINE_URL: http://geth-node1:8551
+      CHAKRAM_GETH_RPC: http://geth-node1:8545
+      CHAKRAM_P2P_PORT: "26656"
+      CHAKRAM_RPC_PORT: "26657"
+      CHAKRAM_API_ADDR: "0.0.0.0:8081"
+      CHAKRAM_PEERS: ${CHAKRAM_LOCALNET_PEERS:-}
+      CHAKRAM_JWT_PATH: /run/secrets/jwt
+      CHAKRAM_STAKING_CONTRACT: ${CHAKRAM_STAKING_CONTRACT:-}
+    volumes: [chakram-node1-data:/data/chakram]
+    secrets: [jwt]
+    networks: [chakram-net]
+    ports:
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:26757:26657"
+
+  geth-node2:
+    <<: *geth-base
+    profiles: [localnet]
+    container_name: chakram-geth-2
+    command: >
+      --datadir /data --networkid ${CHAKRAM_NETWORK_ID:-11640}
+      --syncmode full --http --http.addr 0.0.0.0 --http.port 8545
+      --http.api eth,net,web3,admin
+      --http.vhosts "geth-node2,localhost"
+      --authrpc.addr 0.0.0.0 --authrpc.port 8551
+      --authrpc.jwtsecret /run/secrets/jwt --authrpc.vhosts "geth-node2,localhost"
+      --port 30303 --maxpeers 3 --gcmode full
+    volumes: [geth-node2-data:/data]
+    secrets: [jwt]
+    networks: [chakram-net]
+
+  chakram-node2:
+    <<: *chakram-base
+    profiles: [localnet]
+    container_name: chakram-comet-2
+    depends_on:
+      geth-node2:
+        condition: service_healthy
+    environment:
+      CHAKRAM_CHAIN_ID: ${CHAKRAM_CHAIN_ID:-chakram-localnet-1}
+      CHAKRAM_REWARD_ADDRESS: ${CHAKRAM_NODE2_REWARD:-}
+      CHAKRAM_ENGINE_URL: http://geth-node2:8551
+      CHAKRAM_GETH_RPC: http://geth-node2:8545
+      CHAKRAM_P2P_PORT: "26656"
+      CHAKRAM_RPC_PORT: "26657"
+      CHAKRAM_API_ADDR: "0.0.0.0:8082"
+      CHAKRAM_PEERS: ${CHAKRAM_LOCALNET_PEERS:-}
+      CHAKRAM_JWT_PATH: /run/secrets/jwt
+      CHAKRAM_STAKING_CONTRACT: ${CHAKRAM_STAKING_CONTRACT:-}
+    volumes: [chakram-node2-data:/data/chakram]
+    secrets: [jwt]
+    networks: [chakram-net]
+    ports:
+      - "127.0.0.1:8082:8082"
+      - "127.0.0.1:26857:26657"
+
+  geth-node3:
+    <<: *geth-base
+    profiles: [localnet]
+    container_name: chakram-geth-3
+    command: >
+      --datadir /data --networkid ${CHAKRAM_NETWORK_ID:-11640}
+      --syncmode full --http --http.addr 0.0.0.0 --http.port 8545
+      --http.api eth,net,web3,admin
+      --http.vhosts "geth-node3,localhost"
+      --authrpc.addr 0.0.0.0 --authrpc.port 8551
+      --authrpc.jwtsecret /run/secrets/jwt --authrpc.vhosts "geth-node3,localhost"
+      --port 30303 --maxpeers 3 --gcmode full
+    volumes: [geth-node3-data:/data]
+    secrets: [jwt]
+    networks: [chakram-net]
+
+  chakram-node3:
+    <<: *chakram-base
+    profiles: [localnet]
+    container_name: chakram-comet-3
+    depends_on:
+      geth-node3:
+        condition: service_healthy
+    environment:
+      CHAKRAM_CHAIN_ID: ${CHAKRAM_CHAIN_ID:-chakram-localnet-1}
+      CHAKRAM_REWARD_ADDRESS: ${CHAKRAM_NODE3_REWARD:-}
+      CHAKRAM_ENGINE_URL: http://geth-node3:8551
+      CHAKRAM_GETH_RPC: http://geth-node3:8545
+      CHAKRAM_P2P_PORT: "26656"
+      CHAKRAM_RPC_PORT: "26657"
+      CHAKRAM_API_ADDR: "0.0.0.0:8083"
+      CHAKRAM_PEERS: ${CHAKRAM_LOCALNET_PEERS:-}
+      CHAKRAM_JWT_PATH: /run/secrets/jwt
+      CHAKRAM_STAKING_CONTRACT: ${CHAKRAM_STAKING_CONTRACT:-}
+    volumes: [chakram-node3-data:/data/chakram]
+    secrets: [jwt]
+    networks: [chakram-net]
+    ports:
+      - "127.0.0.1:8083:8083"
+      - "127.0.0.1:26957:26657"
+
+  # ── monitoring ────────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    profiles: [monitoring]
+    container_name: chakram-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks: [chakram-net]
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    profiles: [monitoring]
+    container_name: chakram-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set; run bash setup.sh first}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_HTTP_PORT: "3000"
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks: [chakram-net]
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+networks:
+  chakram-net:
+    driver: bridge
+    # Engine API (8551) is internal-only — never exposed to host via port mapping.
+    internal: false
+
+volumes:
+  geth-dev-data:
+    name: chakram_geth-dev-data
+  chakram-dev-data:
+    name: chakram_chakram-dev-data
+  genesis-dev:
+    name: chakram_genesis-dev
+  geth-fullnode-data:
+    name: chakram_geth-fullnode-data
+  chakram-fullnode-data:
+    name: chakram_chakram-fullnode-data
+  geth-node0-data:
+    name: chakram_geth-node0-data
+  chakram-node0-data:
+    name: chakram_chakram-node0-data
+  geth-node1-data:
+    name: chakram_geth-node1-data
+  chakram-node1-data:
+    name: chakram_chakram-node1-data
+  geth-node2-data:
+    name: chakram_geth-node2-data
+  chakram-node2-data:
+    name: chakram_chakram-node2-data
+  geth-node3-data:
+    name: chakram_geth-node3-data
+  chakram-node3-data:
+    name: chakram_chakram-node3-data
+  prometheus-data:
+    name: chakram_prometheus-data
+  grafana-data:
+    name: chakram_grafana-data
+
+secrets:
+  jwt:
+    file: ${CHAKRAM_JWT_FILE:-./secrets/jwt.hex}

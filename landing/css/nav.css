@@ -1,0 +1,92 @@
+/* ── Navigation ── */
+#nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: var(--nav-h);
+  transition: background var(--t-base), border-color var(--t-base), backdrop-filter var(--t-base);
+}
+
+#nav.scrolled {
+  background: rgba(7, 7, 7, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.nav-brand img {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  object-fit: contain;
+}
+
+.nav-brand span {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-1);
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  list-style: none;
+}
+
+.nav-links a {
+  display: block;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-2);
+  border-radius: var(--r-sm);
+  transition: color var(--t-fast), background var(--t-fast);
+}
+
+.nav-links a:hover {
+  color: var(--text-1);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nav-cta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.nav-mobile-toggle {
+  display: none;
+  color: var(--text-2);
+  font-size: 1.25rem;
+  padding: var(--space-2);
+}
+
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .nav-mobile-toggle { display: block; }
+  .nav-cta .btn-outline { display: none; }
+}

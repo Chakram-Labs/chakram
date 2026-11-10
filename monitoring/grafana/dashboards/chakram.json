@@ -1,0 +1,147 @@
+{
+  "__inputs": [],
+  "__requires": [
+    {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "12.0.0"},
+    {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}
+  ],
+  "annotations": {"list": []},
+  "description": "Chakram blockchain node metrics",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "red", "value": null},
+            {"color": "green", "value": 1}
+          ]},
+          "unit": "none"
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "textMode": "auto"},
+      "title": "Chain Height",
+      "type": "stat",
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "max(chakram_chain_height)",
+        "legendFormat": "height"
+      }]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 1}
+          ]},
+          "unit": "none",
+          "mappings": [
+            {"options": {"0": {"text": "Synced"}}, "type": "value"},
+            {"options": {"1": {"text": "Catching up"}}, "type": "value"}
+          ]
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "background", "graphMode": "none"},
+      "title": "Sync Status",
+      "type": "stat",
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "max(chakram_catching_up)",
+        "legendFormat": "catching up"
+      }]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "red", "value": null},
+            {"color": "yellow", "value": 1},
+            {"color": "green", "value": 3}
+          ]},
+          "unit": "none"
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "background", "graphMode": "none"},
+      "title": "Peer Count",
+      "type": "stat",
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "max(chakram_peer_count)",
+        "legendFormat": "peers"
+      }]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "none"}
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 4},
+      "id": 4,
+      "options": {
+        "legend": {"calcs": [], "displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "single"}
+      },
+      "title": "Chain Height Over Time",
+      "type": "timeseries",
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "chakram_chain_height",
+        "legendFormat": "{{instance}}"
+      }]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "reqps"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "id": 5,
+      "title": "API Request Rate",
+      "type": "timeseries",
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "rate(chakram_api_requests_total[1m])",
+        "legendFormat": "{{path}} {{status}}"
+      }]
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "none"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "id": 6,
+      "title": "Faucet Drips (dev)",
+      "type": "timeseries",
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "increase(chakram_faucet_drips_total[5m])",
+        "legendFormat": "drips/5m"
+      }]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["chakram", "blockchain"],
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Chakram Node",
+  "uid": "chakram-node",
+  "version": 1
+}
